@@ -27,12 +27,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PluginHost_Session_FullMethodName    = "/repeatertastic.plugin.v1.PluginHost/Session"
-	PluginHost_ListRadios_FullMethodName = "/repeatertastic.plugin.v1.PluginHost/ListRadios"
-	PluginHost_ListNodes_FullMethodName  = "/repeatertastic.plugin.v1.PluginHost/ListNodes"
-	PluginHost_SendText_FullMethodName   = "/repeatertastic.plugin.v1.PluginHost/SendText"
-	PluginHost_Traceroute_FullMethodName = "/repeatertastic.plugin.v1.PluginHost/Traceroute"
-	PluginHost_GetStatus_FullMethodName  = "/repeatertastic.plugin.v1.PluginHost/GetStatus"
+	PluginHost_Session_FullMethodName       = "/repeatertastic.plugin.v1.PluginHost/Session"
+	PluginHost_ListRadios_FullMethodName    = "/repeatertastic.plugin.v1.PluginHost/ListRadios"
+	PluginHost_ListNodes_FullMethodName     = "/repeatertastic.plugin.v1.PluginHost/ListNodes"
+	PluginHost_SendText_FullMethodName      = "/repeatertastic.plugin.v1.PluginHost/SendText"
+	PluginHost_Traceroute_FullMethodName    = "/repeatertastic.plugin.v1.PluginHost/Traceroute"
+	PluginHost_ListSensors_FullMethodName   = "/repeatertastic.plugin.v1.PluginHost/ListSensors"
+	PluginHost_PublishSensor_FullMethodName = "/repeatertastic.plugin.v1.PluginHost/PublishSensor"
+	PluginHost_GetStatus_FullMethodName     = "/repeatertastic.plugin.v1.PluginHost/GetStatus"
 )
 
 // PluginHostClient is the client API for PluginHost service.
@@ -51,6 +53,10 @@ type PluginHostClient interface {
 	// traceroute.send: from the identity chosen in the plugin's "identities" settings on that radio
 	// (the relay persona when none is), within the plugin's send budget.
 	Traceroute(ctx context.Context, in *TracerouteRequest, opts ...grpc.CallOption) (*SendResponse, error)
+	// sensors.publish: list the host's sensors, and give a reading to one of kind "push". The
+	// identities it is attached to then broadcast it as their own sensor (docs/sensors.md).
+	ListSensors(ctx context.Context, in *ListSensorsRequest, opts ...grpc.CallOption) (*ListSensorsResponse, error)
+	PublishSensor(ctx context.Context, in *PublishSensorRequest, opts ...grpc.CallOption) (*PublishSensorResponse, error)
 	// status.read: how the radios are doing right now. Radio says what a radio *is*; this says what
 	// it is *doing* — the figures a dashboard, an exporter or an alert would want.
 	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error)
@@ -117,6 +123,26 @@ func (c *pluginHostClient) Traceroute(ctx context.Context, in *TracerouteRequest
 	return out, nil
 }
 
+func (c *pluginHostClient) ListSensors(ctx context.Context, in *ListSensorsRequest, opts ...grpc.CallOption) (*ListSensorsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSensorsResponse)
+	err := c.cc.Invoke(ctx, PluginHost_ListSensors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *pluginHostClient) PublishSensor(ctx context.Context, in *PublishSensorRequest, opts ...grpc.CallOption) (*PublishSensorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishSensorResponse)
+	err := c.cc.Invoke(ctx, PluginHost_PublishSensor_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *pluginHostClient) GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetStatusResponse)
@@ -143,6 +169,10 @@ type PluginHostServer interface {
 	// traceroute.send: from the identity chosen in the plugin's "identities" settings on that radio
 	// (the relay persona when none is), within the plugin's send budget.
 	Traceroute(context.Context, *TracerouteRequest) (*SendResponse, error)
+	// sensors.publish: list the host's sensors, and give a reading to one of kind "push". The
+	// identities it is attached to then broadcast it as their own sensor (docs/sensors.md).
+	ListSensors(context.Context, *ListSensorsRequest) (*ListSensorsResponse, error)
+	PublishSensor(context.Context, *PublishSensorRequest) (*PublishSensorResponse, error)
 	// status.read: how the radios are doing right now. Radio says what a radio *is*; this says what
 	// it is *doing* — the figures a dashboard, an exporter or an alert would want.
 	GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error)
@@ -170,6 +200,12 @@ func (UnimplementedPluginHostServer) SendText(context.Context, *SendTextRequest)
 }
 func (UnimplementedPluginHostServer) Traceroute(context.Context, *TracerouteRequest) (*SendResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Traceroute not implemented")
+}
+func (UnimplementedPluginHostServer) ListSensors(context.Context, *ListSensorsRequest) (*ListSensorsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSensors not implemented")
+}
+func (UnimplementedPluginHostServer) PublishSensor(context.Context, *PublishSensorRequest) (*PublishSensorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishSensor not implemented")
 }
 func (UnimplementedPluginHostServer) GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetStatus not implemented")
@@ -274,6 +310,42 @@ func _PluginHost_Traceroute_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PluginHost_ListSensors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSensorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PluginHostServer).ListSensors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PluginHost_ListSensors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PluginHostServer).ListSensors(ctx, req.(*ListSensorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PluginHost_PublishSensor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishSensorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PluginHostServer).PublishSensor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PluginHost_PublishSensor_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PluginHostServer).PublishSensor(ctx, req.(*PublishSensorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PluginHost_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetStatusRequest)
 	if err := dec(in); err != nil {
@@ -314,6 +386,14 @@ var PluginHost_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Traceroute",
 			Handler:    _PluginHost_Traceroute_Handler,
+		},
+		{
+			MethodName: "ListSensors",
+			Handler:    _PluginHost_ListSensors_Handler,
+		},
+		{
+			MethodName: "PublishSensor",
+			Handler:    _PluginHost_PublishSensor_Handler,
 		},
 		{
 			MethodName: "GetStatus",

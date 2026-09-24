@@ -43,6 +43,9 @@ LoRa modem ──USB/KISS── radio driver ── air bridge ── mesh host 
 - **Plugins:** separate programs, started by `internal/plugins` or attached over TCP, talk gRPC to
   the Plugin API host. They see bus events their permissions allow, and send through the same queue
   within a per-plugin budget.
+- **Sensors:** `internal/sensors` samples a host reading once and writes it into each attached
+  identity's node directory; a shim inside that node's meshtasticd answers its I²C reads from the
+  file, so the node detects, reads and broadcasts the sensor as its own ([`sensors.md`](sensors.md)).
 
 The original plan and research are in [`plan.html`](plan.html). The HTTP API is documented in
 [`api.md`](api.md), and the Plugin API in [`plugin-api.md`](plugin-api.md). Coding agents and new contributors: read [`AGENTS.md`](../AGENTS.md) first.
@@ -67,12 +70,14 @@ internal/site          several radios on one host: shared transmit turns and air
 internal/config        YAML config, validation, environment overrides
 internal/web           REST/SSE API, auth, embedded GUI
 internal/plugins       plugin bundles, supervisor, Plugin API host, permissions and budgets
+internal/sensors       host sensor sources, the values file each hosted node reads (see sensors.md)
 api/plugin/v1          Plugin API: plugin.proto and its generated Go (scripts/gen-plugin-proto.sh)
 sdk/                   Go client for plugin authors
 examples/plugins/hello example plugin with a panel (make plugin-example)
 api/meshtastic         vendored Meshtastic .proto files and their generated Go, package pb (scripts/gen-proto.sh); public for plugins
 ui/                    web GUI (Vue 3 + Vite), built into internal/web/dist
 firmware/              KISS modem patch, board list, build script
+shim/                  the I²C shim a hosted node loads so it owns its sensors (see sensors.md)
 tests/interop          meshtasticd Docker harness + golden vectors
 deploy/                systemd unit, example config, install script (sets up meshtasticd too), docker-compose example
 Dockerfile             container image: the official meshtasticd image, with repeatertastic added

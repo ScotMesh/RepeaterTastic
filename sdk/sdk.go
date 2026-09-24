@@ -186,6 +186,15 @@ func (c *Client) Log(level, format string, args ...any) error {
 	return c.send(&pluginv1.PluginMessage{Msg: &pluginv1.PluginMessage_Log{Log: &pluginv1.LogLine{Level: level, Message: fmt.Sprintf(format, args...)}}})
 }
 
+// PublishSensor gives a reading to one of the host's push sensors, which the identities it is
+// attached to then broadcast as their own (needs the sensors.publish permission). Field names are
+// the Meshtastic ones: temperature, humidity, lux, voltage, current, pm10, pm25, pm100, distance,
+// radiation, rainfall_1h, rainfall_24h.
+func (c *Client) PublishSensor(ctx context.Context, id string, fields map[string]float64) error {
+	_, err := c.Host.PublishSensor(ctx, &pluginv1.PublishSensorRequest{SensorId: id, Fields: fields})
+	return err
+}
+
 // Panel sends data for the plugin's GUI panel (JSON-encoded).
 func (c *Client) Panel(v any) error {
 	b, err := json.Marshal(v)

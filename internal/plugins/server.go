@@ -71,6 +71,7 @@ const (
 	permMessagesSend   = "messages.send"
 	permTracerouteSend = "traceroute.send"
 	permStatusRead     = "status.read"
+	permSensorsPublish = "sensors.publish"
 )
 
 // serve listens on the Unix socket (and TCP, if configured) and serves the Plugin API.

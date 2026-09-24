@@ -203,13 +203,16 @@ func (s *Server) eventPayload(re radioEvent, radios []*radioCtx) (any, bool) {
 		return s.identityEventPayload(re, site)
 	case "node":
 		return s.nodeEventPayload(re, radios)
-	case "log", "plugin":
+	case "log", "plugin", "sensor":
 		// Published on every radio's bus: send them once.
 		if site && re.rc != radios[0] {
 			return nil, false
 		}
-		if e.Type == "log" {
+		switch e.Type {
+		case "log":
 			return e.Data, true
+		case "sensor":
+			return s.sensorEventPayload(e)
 		}
 		return s.pluginEventPayload(e)
 	}

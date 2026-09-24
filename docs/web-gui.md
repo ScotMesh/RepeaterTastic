@@ -1,6 +1,6 @@
 # Using the web GUI
 
-[← README](../README.md) · [Hardware](hardware.md) · [Configuration](configuration.md) · [Several radios](radios.md) · [MQTT](mqtt.md) · [Plugins](plugins.md) · [HTTP API](api.md) · [Architecture](architecture.md)
+[← README](../README.md) · [Hardware](hardware.md) · [Configuration](configuration.md) · [Several radios](radios.md) · [MQTT](mqtt.md) · [Sensors](sensors.md) · [Plugins](plugins.md) · [HTTP API](api.md) · [Architecture](architecture.md)
 
 Open `http://<host>:8080`. The first visit runs the setup wizard: the modem, region and preset,
 the relay role (a Meshtastic role such as client, router or client mute) and the admin password. The **account menu** (top right)
@@ -42,6 +42,7 @@ many open tabs don't use up the browser's connections to the host, and catches u
 | **Statistics** | Airtime per identity, traffic and RF history |
 | **Links** | UDP multicast and each MQTT connection's state and counters |
 | **Configuration** | Radios, Relay, Airtime & duty, Position & hardware, MQTT, Web & API tokens, meshtasticd, Backup & restore |
+| **Sensors** | Add host sensors, watch their latest reading, and choose which identities publish each one as their own ([Sensors](sensors.md)) |
 | **Plugins** | Install, attach, enable and configure plugins; their status, log and panel; **Send limits** for every plugin ([Plugins](plugins.md)) |
 | **Logs** | The daemon's log, live, each line labelled with its radio and identity (filter by either). Each meshtasticd's own output is under Configuration → meshtasticd → Log |
 
@@ -73,6 +74,17 @@ Identities → **Edit** → **App can change node settings** (off by default). O
 the identity can read everything and change its names and channels, but not its radio, device,
 module or position settings, and it can't reboot or reset the node: those stay RepeaterTastic's to
 manage.
+
+### Publish a sensor on an identity
+
+1. **Sensors → Add sensor**: a name, and where the reading comes from — a command to run, a file to
+   read, or **push** for something that will send readings to the API.
+2. **Read now** shows what came back, so a wrong command is obvious straight away.
+3. **Attach** ticks the identities that should publish it and the fields each sends. Attaching
+   restarts those identities' nodes — they only look for sensors when they start — and the dialog
+   says which ones will bounce. Nothing else on the host is interrupted.
+
+An identity's drawer has the same list from the other side: what this persona publishes.
 
 ### Move an identity to another radio
 

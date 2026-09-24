@@ -82,11 +82,17 @@ for a permission it wasn't granted gets a "permission denied" error.
 | `messages.read` | Read text messages to and from each radio's relay persona |
 | `messages.send` | Send text messages from each radio's relay persona |
 | `traceroute.send` | Send traceroutes from the identity chosen in the plugin's settings on that radio, or the radio's relay persona when none is chosen |
+| `status.read` | See how the radios are doing: airtime, noise floor, channel use and the packet counters |
+| `sensors.publish` | Give readings to the host's push sensors, which the identities they're attached to publish as their own ([Sensors](sensors.md)) |
 
 Plugins send text as the **relay persona** of each radio: the node the site already is on the
 mesh. Traceroutes go from the identity you choose in the plugin's settings, or the relay persona.
 Transmissions go through the normal transmit queue and duty cycle, and are refused while a radio's
 relay is in Monitor or Off mode.
+
+A plugin with `sensors.publish` can feed a sensor you created with kind **push** ([Sensors](sensors.md)),
+which is how a plugin that owns some hardware, or fetches a reading from elsewhere, gets it on air.
+It can't create a sensor or decide which identities publish it: you do that under **Sensors**.
 
 Each plugin also has a send budget, 30 messages and 12 traceroutes an hour by default. A plugin
 may send a sixth of its hourly budget at once (at least one), then the budget refills evenly: with

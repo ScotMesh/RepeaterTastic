@@ -7,7 +7,7 @@ LDFLAGS := -s -w -X main.version=$(VERSION) -X main.mapAPIKey=$(MAP_API_KEY)
 GOFLAGS := -trimpath
 DIST := dist
 
-.PHONY: all build ui test race lint interop dist clean proto firmware plugin-example
+.PHONY: all build ui test race lint interop dist clean proto firmware plugin-example shim shim-test
 
 all: build
 
@@ -49,6 +49,22 @@ dist:
 
 firmware:
 	./firmware/build.sh
+
+# The LD_PRELOAD I2C shim that makes a stock meshtasticd believe it owns a sensor
+# (shim/README.md). Built inside debian:trixie for amd64, arm64 and arm (armv7
+# hard-float), named for the GOARCH each one is embedded under. No armv6: a Pi
+# Zero or Pi 1 gets no shim and the daemon says so.
+shim:
+	./shim/build.sh
+	@cp shim/build/i2cshim-linux-amd64.so shim/build/i2cshim-linux-arm64.so \
+	   shim/build/i2cshim-linux-arm.so internal/nodes/shim/
+	@echo "copied all three libraries into internal/nodes/shim (the binary embeds them)"
+
+# Replays Portduino's exact I2C call sequences against the shim and asserts the
+# decoded readings. No containers, so it runs in CI; it also replays the armv7
+# object under qemu-user when the host has it.
+shim-test:
+	./shim/test.sh
 
 # The example plugin as an installable bundle.
 plugin-example:

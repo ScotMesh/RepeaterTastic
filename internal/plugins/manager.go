@@ -36,6 +36,9 @@ type Options struct {
 	Log     *slog.Logger
 	// Notify is called (never under a lock) when a plugin's state, status or panel data changes.
 	Notify func(id string)
+	// Sensors lets a plugin with sensors.publish give readings to the host's push sensors
+	// (nil = no sensors, and the calls answer Unavailable).
+	Sensors SensorHost
 }
 
 // Errors the web API maps to status codes.

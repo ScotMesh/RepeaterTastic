@@ -1,11 +1,13 @@
 <script setup lang="ts">
-// One identity's channels at a glance, plus sharing and importing a channel URL. Slots are added,
-// edited and removed on the Channels page only (one place for that).
+// One identity's drawer: its channels at a glance, sharing and importing a channel URL, and the
+// sensors this persona publishes. Slots are added, edited and removed on the Channels page only, and
+// sensors are attached with the same dialog as on the Sensors page (one place for each job).
 import { computed, ref, watch } from 'vue'
 import { Lock, QrCode as QrIcon } from '@lucide/vue'
 import { api, enc } from '@/api/client'
 import type { ChannelRole, Identity } from '@/api/types'
 import Drawer from '@/components/ui/Drawer.vue'
+import IdentitySensors from '@/components/sensors/IdentitySensors.vue'
 import QrCode from '@/components/ui/QrCode.vue'
 import CopyButton from '@/components/ui/CopyButton.vue'
 import Spinner from '@/components/ui/Spinner.vue'
@@ -17,7 +19,7 @@ const props = defineProps<{ identityId: string | null }>()
 const emit = defineEmits<{ close: [] }>()
 
 const identity = computed<Identity | undefined>(() => live.identities.find((i) => i.node_id === props.identityId))
-const tab = ref<'edit' | 'share'>('edit')
+const tab = ref<'edit' | 'share' | 'sensors'>('edit')
 const shareUrl = ref('')
 const importUrl = ref('')
 const importing = ref(false)
@@ -72,11 +74,12 @@ function roleCls(r: ChannelRole): string {
 </script>
 
 <template>
-  <Drawer :open="!!identity" :title="`Channels · ${identity?.long_name ?? ''}`" :subtitle="identity?.node_id" wide @close="emit('close')">
+  <Drawer :open="!!identity" :title="identity?.long_name ?? ''" :subtitle="identity?.node_id" wide @close="emit('close')">
     <div v-if="identity">
       <div class="tabs -mx-5 -mt-4 mb-4 px-5" role="tablist">
         <button type="button" role="tab" :aria-selected="tab === 'edit'" @click="tab = 'edit'">Slots</button>
         <button type="button" role="tab" :aria-selected="tab === 'share'" @click="tab = 'share'">Share &amp; import</button>
+        <button type="button" role="tab" :aria-selected="tab === 'sensors'" @click="tab = 'sensors'">Sensors</button>
       </div>
 
       <div v-if="tab === 'edit'" class="space-y-2">
@@ -102,6 +105,8 @@ function roleCls(r: ChannelRole): string {
           </span>
         </div>
       </div>
+
+      <IdentitySensors v-else-if="tab === 'sensors'" :identity="identity" />
 
       <div v-else class="space-y-6">
         <section>

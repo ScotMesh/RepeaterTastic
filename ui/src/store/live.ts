@@ -1,7 +1,7 @@
 // Small reactive store fed by REST snapshots plus the SSE stream (/api/v1/events).
 import { markRaw, reactive, shallowRef } from 'vue'
 import { API_BASE, MAIN_RADIO, api, token, withRadio } from '@/api/client'
-import type { Identity, LogLine, MeshNode, Message, Packet, Plugin, RadioSummary, RadiosResponse, RfStats, Status, TracerouteEvent } from '@/api/types'
+import type { Identity, LogLine, MeshNode, Message, Packet, Plugin, RadioSummary, RadiosResponse, RfStats, Sensor, Status, TracerouteEvent } from '@/api/types'
 
 const PACKET_BUFFER = 400
 const LOG_BUFFER = 1500
@@ -72,6 +72,8 @@ const listeners = {
   traceroute: new Set<Handler<TracerouteEvent>>(),
   log: new Set<Handler<LogLine>>(),
   plugin: new Set<Handler<Plugin>>(),
+  /** A sensor read, failed or was edited (or `deleted`). */
+  sensor: new Set<Handler<Sensor>>(),
   /** The event stream reconnected after a pause: views that load their own data should reload. */
   resync: new Set<Handler<void>>(),
 }
@@ -215,6 +217,10 @@ export function connect() {
   es.addEventListener('plugin', (e) => {
     const p = parse<Plugin>(e as MessageEvent)
     if (p) listeners.plugin.forEach((fn) => fn(p))
+  })
+  es.addEventListener('sensor', (e) => {
+    const sn = parse<Sensor>(e as MessageEvent)
+    if (sn) listeners.sensor.forEach((fn) => fn(sn))
   })
   es.addEventListener('log', (e) => {
     const l = parse<LogLine>(e as MessageEvent)

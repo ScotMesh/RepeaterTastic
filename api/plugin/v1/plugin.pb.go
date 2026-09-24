@@ -1220,8 +1220,8 @@ func (x *GetStatusResponse) GetRadios() []*RadioStatus {
 	return nil
 }
 
-// StatusEvent arrives on the session stream for plugins holding status.read, once every
-// status_interval_s (see Welcome), so a publisher does not have to poll.
+// StatusEvent arrives on the session stream for plugins holding status.read, every 30 seconds,
+// so a publisher does not have to poll.
 type StatusEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Radios        []*RadioStatus         `protobuf:"bytes,1,rep,name=radios,proto3" json:"radios,omitempty"`
@@ -2264,6 +2264,253 @@ func (x *SendResponse) GetPacketId() uint32 {
 	return 0
 }
 
+type ListSensorsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSensorsRequest) Reset() {
+	*x = ListSensorsRequest{}
+	mi := &file_plugin_v1_plugin_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSensorsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSensorsRequest) ProtoMessage() {}
+
+func (x *ListSensorsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_v1_plugin_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSensorsRequest.ProtoReflect.Descriptor instead.
+func (*ListSensorsRequest) Descriptor() ([]byte, []int) {
+	return file_plugin_v1_plugin_proto_rawDescGZIP(), []int{30}
+}
+
+type ListSensorsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sensors       []*Sensor              `protobuf:"bytes,1,rep,name=sensors,proto3" json:"sensors,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSensorsResponse) Reset() {
+	*x = ListSensorsResponse{}
+	mi := &file_plugin_v1_plugin_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSensorsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSensorsResponse) ProtoMessage() {}
+
+func (x *ListSensorsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_v1_plugin_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSensorsResponse.ProtoReflect.Descriptor instead.
+func (*ListSensorsResponse) Descriptor() ([]byte, []int) {
+	return file_plugin_v1_plugin_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ListSensorsResponse) GetSensors() []*Sensor {
+	if x != nil {
+		return x.Sensors
+	}
+	return nil
+}
+
+// Sensor is one of the host's sensors. A plugin may publish to those whose kind is "push".
+type Sensor struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`                                                                                 // push | exec | file
+	Fields        map[string]float64     `protobuf:"bytes,4,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"` // its latest reading, field name to value
+	ReadAtUnix    int64                  `protobuf:"varint,5,opt,name=read_at_unix,json=readAtUnix,proto3" json:"read_at_unix,omitempty"`                                                // when that reading was taken (0 = never read)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Sensor) Reset() {
+	*x = Sensor{}
+	mi := &file_plugin_v1_plugin_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Sensor) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Sensor) ProtoMessage() {}
+
+func (x *Sensor) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_v1_plugin_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Sensor.ProtoReflect.Descriptor instead.
+func (*Sensor) Descriptor() ([]byte, []int) {
+	return file_plugin_v1_plugin_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *Sensor) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Sensor) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Sensor) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *Sensor) GetFields() map[string]float64 {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+func (x *Sensor) GetReadAtUnix() int64 {
+	if x != nil {
+		return x.ReadAtUnix
+	}
+	return 0
+}
+
+type PublishSensorRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	SensorId string                 `protobuf:"bytes,1,opt,name=sensor_id,json=sensorId,proto3" json:"sensor_id,omitempty"` // the id of a sensor whose kind is "push"
+	// fields are Meshtastic names: temperature, humidity, lux, voltage, current, pm10, pm25, pm100,
+	// distance, radiation, rainfall_1h, rainfall_24h (docs/sensors.md). Unknown names are ignored.
+	Fields        map[string]float64 `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PublishSensorRequest) Reset() {
+	*x = PublishSensorRequest{}
+	mi := &file_plugin_v1_plugin_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishSensorRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishSensorRequest) ProtoMessage() {}
+
+func (x *PublishSensorRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_v1_plugin_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishSensorRequest.ProtoReflect.Descriptor instead.
+func (*PublishSensorRequest) Descriptor() ([]byte, []int) {
+	return file_plugin_v1_plugin_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *PublishSensorRequest) GetSensorId() string {
+	if x != nil {
+		return x.SensorId
+	}
+	return ""
+}
+
+func (x *PublishSensorRequest) GetFields() map[string]float64 {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+type PublishSensorResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PublishSensorResponse) Reset() {
+	*x = PublishSensorResponse{}
+	mi := &file_plugin_v1_plugin_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishSensorResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishSensorResponse) ProtoMessage() {}
+
+func (x *PublishSensorResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_v1_plugin_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishSensorResponse.ProtoReflect.Descriptor instead.
+func (*PublishSensorResponse) Descriptor() ([]byte, []int) {
+	return file_plugin_v1_plugin_proto_rawDescGZIP(), []int{34}
+}
+
 var File_plugin_v1_plugin_proto protoreflect.FileDescriptor
 
 const file_plugin_v1_plugin_proto_rawDesc = "" +
@@ -2443,7 +2690,27 @@ const file_plugin_v1_plugin_proto_rawDesc = "" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x12\n" +
 	"\x04from\x18\x03 \x01(\tR\x04from\"+\n" +
 	"\fSendResponse\x12\x1b\n" +
-	"\tpacket_id\x18\x01 \x01(\rR\bpacketId2\xe2\x04\n" +
+	"\tpacket_id\x18\x01 \x01(\rR\bpacketId\"\x14\n" +
+	"\x12ListSensorsRequest\"Q\n" +
+	"\x13ListSensorsResponse\x12:\n" +
+	"\asensors\x18\x01 \x03(\v2 .repeatertastic.plugin.v1.SensorR\asensors\"\xe3\x01\n" +
+	"\x06Sensor\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\x12D\n" +
+	"\x06fields\x18\x04 \x03(\v2,.repeatertastic.plugin.v1.Sensor.FieldsEntryR\x06fields\x12 \n" +
+	"\fread_at_unix\x18\x05 \x01(\x03R\n" +
+	"readAtUnix\x1a9\n" +
+	"\vFieldsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"\xc2\x01\n" +
+	"\x14PublishSensorRequest\x12\x1b\n" +
+	"\tsensor_id\x18\x01 \x01(\tR\bsensorId\x12R\n" +
+	"\x06fields\x18\x02 \x03(\v2:.repeatertastic.plugin.v1.PublishSensorRequest.FieldsEntryR\x06fields\x1a9\n" +
+	"\vFieldsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"\x17\n" +
+	"\x15PublishSensorResponse2\xc0\x06\n" +
 	"\n" +
 	"PluginHost\x12]\n" +
 	"\aSession\x12'.repeatertastic.plugin.v1.PluginMessage\x1a%.repeatertastic.plugin.v1.HostMessage(\x010\x01\x12g\n" +
@@ -2452,7 +2719,9 @@ const file_plugin_v1_plugin_proto_rawDesc = "" +
 	"\tListNodes\x12*.repeatertastic.plugin.v1.ListNodesRequest\x1a+.repeatertastic.plugin.v1.ListNodesResponse\x12]\n" +
 	"\bSendText\x12).repeatertastic.plugin.v1.SendTextRequest\x1a&.repeatertastic.plugin.v1.SendResponse\x12a\n" +
 	"\n" +
-	"Traceroute\x12+.repeatertastic.plugin.v1.TracerouteRequest\x1a&.repeatertastic.plugin.v1.SendResponse\x12d\n" +
+	"Traceroute\x12+.repeatertastic.plugin.v1.TracerouteRequest\x1a&.repeatertastic.plugin.v1.SendResponse\x12j\n" +
+	"\vListSensors\x12,.repeatertastic.plugin.v1.ListSensorsRequest\x1a-.repeatertastic.plugin.v1.ListSensorsResponse\x12p\n" +
+	"\rPublishSensor\x12..repeatertastic.plugin.v1.PublishSensorRequest\x1a/.repeatertastic.plugin.v1.PublishSensorResponse\x12d\n" +
 	"\tGetStatus\x12*.repeatertastic.plugin.v1.GetStatusRequest\x1a+.repeatertastic.plugin.v1.GetStatusResponseB;Z9github.com/ScotMesh/RepeaterTastic/api/plugin/v1;pluginv1b\x06proto3"
 
 var (
@@ -2467,39 +2736,46 @@ func file_plugin_v1_plugin_proto_rawDescGZIP() []byte {
 	return file_plugin_v1_plugin_proto_rawDescData
 }
 
-var file_plugin_v1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_plugin_v1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_plugin_v1_plugin_proto_goTypes = []any{
-	(*PluginMessage)(nil),      // 0: repeatertastic.plugin.v1.PluginMessage
-	(*HostMessage)(nil),        // 1: repeatertastic.plugin.v1.HostMessage
-	(*Hello)(nil),              // 2: repeatertastic.plugin.v1.Hello
-	(*Welcome)(nil),            // 3: repeatertastic.plugin.v1.Welcome
-	(*Status)(nil),             // 4: repeatertastic.plugin.v1.Status
-	(*LogLine)(nil),            // 5: repeatertastic.plugin.v1.LogLine
-	(*Heartbeat)(nil),          // 6: repeatertastic.plugin.v1.Heartbeat
-	(*PanelData)(nil),          // 7: repeatertastic.plugin.v1.PanelData
-	(*PanelAction)(nil),        // 8: repeatertastic.plugin.v1.PanelAction
-	(*SettingsChanged)(nil),    // 9: repeatertastic.plugin.v1.SettingsChanged
-	(*Stop)(nil),               // 10: repeatertastic.plugin.v1.Stop
-	(*Radio)(nil),              // 11: repeatertastic.plugin.v1.Radio
-	(*RadioStatus)(nil),        // 12: repeatertastic.plugin.v1.RadioStatus
-	(*GetStatusRequest)(nil),   // 13: repeatertastic.plugin.v1.GetStatusRequest
-	(*GetStatusResponse)(nil),  // 14: repeatertastic.plugin.v1.GetStatusResponse
-	(*StatusEvent)(nil),        // 15: repeatertastic.plugin.v1.StatusEvent
-	(*Identity)(nil),           // 16: repeatertastic.plugin.v1.Identity
-	(*Node)(nil),               // 17: repeatertastic.plugin.v1.Node
-	(*PacketEvent)(nil),        // 18: repeatertastic.plugin.v1.PacketEvent
-	(*ChannelHolder)(nil),      // 19: repeatertastic.plugin.v1.ChannelHolder
-	(*NodeEvent)(nil),          // 20: repeatertastic.plugin.v1.NodeEvent
-	(*TextMessageEvent)(nil),   // 21: repeatertastic.plugin.v1.TextMessageEvent
-	(*TracerouteEvent)(nil),    // 22: repeatertastic.plugin.v1.TracerouteEvent
-	(*ListRadiosRequest)(nil),  // 23: repeatertastic.plugin.v1.ListRadiosRequest
-	(*ListRadiosResponse)(nil), // 24: repeatertastic.plugin.v1.ListRadiosResponse
-	(*ListNodesRequest)(nil),   // 25: repeatertastic.plugin.v1.ListNodesRequest
-	(*ListNodesResponse)(nil),  // 26: repeatertastic.plugin.v1.ListNodesResponse
-	(*SendTextRequest)(nil),    // 27: repeatertastic.plugin.v1.SendTextRequest
-	(*TracerouteRequest)(nil),  // 28: repeatertastic.plugin.v1.TracerouteRequest
-	(*SendResponse)(nil),       // 29: repeatertastic.plugin.v1.SendResponse
-	nil,                        // 30: repeatertastic.plugin.v1.Status.FieldsEntry
+	(*PluginMessage)(nil),         // 0: repeatertastic.plugin.v1.PluginMessage
+	(*HostMessage)(nil),           // 1: repeatertastic.plugin.v1.HostMessage
+	(*Hello)(nil),                 // 2: repeatertastic.plugin.v1.Hello
+	(*Welcome)(nil),               // 3: repeatertastic.plugin.v1.Welcome
+	(*Status)(nil),                // 4: repeatertastic.plugin.v1.Status
+	(*LogLine)(nil),               // 5: repeatertastic.plugin.v1.LogLine
+	(*Heartbeat)(nil),             // 6: repeatertastic.plugin.v1.Heartbeat
+	(*PanelData)(nil),             // 7: repeatertastic.plugin.v1.PanelData
+	(*PanelAction)(nil),           // 8: repeatertastic.plugin.v1.PanelAction
+	(*SettingsChanged)(nil),       // 9: repeatertastic.plugin.v1.SettingsChanged
+	(*Stop)(nil),                  // 10: repeatertastic.plugin.v1.Stop
+	(*Radio)(nil),                 // 11: repeatertastic.plugin.v1.Radio
+	(*RadioStatus)(nil),           // 12: repeatertastic.plugin.v1.RadioStatus
+	(*GetStatusRequest)(nil),      // 13: repeatertastic.plugin.v1.GetStatusRequest
+	(*GetStatusResponse)(nil),     // 14: repeatertastic.plugin.v1.GetStatusResponse
+	(*StatusEvent)(nil),           // 15: repeatertastic.plugin.v1.StatusEvent
+	(*Identity)(nil),              // 16: repeatertastic.plugin.v1.Identity
+	(*Node)(nil),                  // 17: repeatertastic.plugin.v1.Node
+	(*PacketEvent)(nil),           // 18: repeatertastic.plugin.v1.PacketEvent
+	(*ChannelHolder)(nil),         // 19: repeatertastic.plugin.v1.ChannelHolder
+	(*NodeEvent)(nil),             // 20: repeatertastic.plugin.v1.NodeEvent
+	(*TextMessageEvent)(nil),      // 21: repeatertastic.plugin.v1.TextMessageEvent
+	(*TracerouteEvent)(nil),       // 22: repeatertastic.plugin.v1.TracerouteEvent
+	(*ListRadiosRequest)(nil),     // 23: repeatertastic.plugin.v1.ListRadiosRequest
+	(*ListRadiosResponse)(nil),    // 24: repeatertastic.plugin.v1.ListRadiosResponse
+	(*ListNodesRequest)(nil),      // 25: repeatertastic.plugin.v1.ListNodesRequest
+	(*ListNodesResponse)(nil),     // 26: repeatertastic.plugin.v1.ListNodesResponse
+	(*SendTextRequest)(nil),       // 27: repeatertastic.plugin.v1.SendTextRequest
+	(*TracerouteRequest)(nil),     // 28: repeatertastic.plugin.v1.TracerouteRequest
+	(*SendResponse)(nil),          // 29: repeatertastic.plugin.v1.SendResponse
+	(*ListSensorsRequest)(nil),    // 30: repeatertastic.plugin.v1.ListSensorsRequest
+	(*ListSensorsResponse)(nil),   // 31: repeatertastic.plugin.v1.ListSensorsResponse
+	(*Sensor)(nil),                // 32: repeatertastic.plugin.v1.Sensor
+	(*PublishSensorRequest)(nil),  // 33: repeatertastic.plugin.v1.PublishSensorRequest
+	(*PublishSensorResponse)(nil), // 34: repeatertastic.plugin.v1.PublishSensorResponse
+	nil,                           // 35: repeatertastic.plugin.v1.Status.FieldsEntry
+	nil,                           // 36: repeatertastic.plugin.v1.Sensor.FieldsEntry
+	nil,                           // 37: repeatertastic.plugin.v1.PublishSensorRequest.FieldsEntry
 }
 var file_plugin_v1_plugin_proto_depIdxs = []int32{
 	2,  // 0: repeatertastic.plugin.v1.PluginMessage.hello:type_name -> repeatertastic.plugin.v1.Hello
@@ -2517,7 +2793,7 @@ var file_plugin_v1_plugin_proto_depIdxs = []int32{
 	8,  // 12: repeatertastic.plugin.v1.HostMessage.action:type_name -> repeatertastic.plugin.v1.PanelAction
 	15, // 13: repeatertastic.plugin.v1.HostMessage.status_event:type_name -> repeatertastic.plugin.v1.StatusEvent
 	11, // 14: repeatertastic.plugin.v1.Welcome.radios:type_name -> repeatertastic.plugin.v1.Radio
-	30, // 15: repeatertastic.plugin.v1.Status.fields:type_name -> repeatertastic.plugin.v1.Status.FieldsEntry
+	35, // 15: repeatertastic.plugin.v1.Status.fields:type_name -> repeatertastic.plugin.v1.Status.FieldsEntry
 	16, // 16: repeatertastic.plugin.v1.Radio.relay:type_name -> repeatertastic.plugin.v1.Identity
 	16, // 17: repeatertastic.plugin.v1.Radio.identities:type_name -> repeatertastic.plugin.v1.Identity
 	12, // 18: repeatertastic.plugin.v1.GetStatusResponse.radios:type_name -> repeatertastic.plugin.v1.RadioStatus
@@ -2526,23 +2802,30 @@ var file_plugin_v1_plugin_proto_depIdxs = []int32{
 	17, // 21: repeatertastic.plugin.v1.NodeEvent.node:type_name -> repeatertastic.plugin.v1.Node
 	11, // 22: repeatertastic.plugin.v1.ListRadiosResponse.radios:type_name -> repeatertastic.plugin.v1.Radio
 	17, // 23: repeatertastic.plugin.v1.ListNodesResponse.nodes:type_name -> repeatertastic.plugin.v1.Node
-	0,  // 24: repeatertastic.plugin.v1.PluginHost.Session:input_type -> repeatertastic.plugin.v1.PluginMessage
-	23, // 25: repeatertastic.plugin.v1.PluginHost.ListRadios:input_type -> repeatertastic.plugin.v1.ListRadiosRequest
-	25, // 26: repeatertastic.plugin.v1.PluginHost.ListNodes:input_type -> repeatertastic.plugin.v1.ListNodesRequest
-	27, // 27: repeatertastic.plugin.v1.PluginHost.SendText:input_type -> repeatertastic.plugin.v1.SendTextRequest
-	28, // 28: repeatertastic.plugin.v1.PluginHost.Traceroute:input_type -> repeatertastic.plugin.v1.TracerouteRequest
-	13, // 29: repeatertastic.plugin.v1.PluginHost.GetStatus:input_type -> repeatertastic.plugin.v1.GetStatusRequest
-	1,  // 30: repeatertastic.plugin.v1.PluginHost.Session:output_type -> repeatertastic.plugin.v1.HostMessage
-	24, // 31: repeatertastic.plugin.v1.PluginHost.ListRadios:output_type -> repeatertastic.plugin.v1.ListRadiosResponse
-	26, // 32: repeatertastic.plugin.v1.PluginHost.ListNodes:output_type -> repeatertastic.plugin.v1.ListNodesResponse
-	29, // 33: repeatertastic.plugin.v1.PluginHost.SendText:output_type -> repeatertastic.plugin.v1.SendResponse
-	29, // 34: repeatertastic.plugin.v1.PluginHost.Traceroute:output_type -> repeatertastic.plugin.v1.SendResponse
-	14, // 35: repeatertastic.plugin.v1.PluginHost.GetStatus:output_type -> repeatertastic.plugin.v1.GetStatusResponse
-	30, // [30:36] is the sub-list for method output_type
-	24, // [24:30] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	32, // 24: repeatertastic.plugin.v1.ListSensorsResponse.sensors:type_name -> repeatertastic.plugin.v1.Sensor
+	36, // 25: repeatertastic.plugin.v1.Sensor.fields:type_name -> repeatertastic.plugin.v1.Sensor.FieldsEntry
+	37, // 26: repeatertastic.plugin.v1.PublishSensorRequest.fields:type_name -> repeatertastic.plugin.v1.PublishSensorRequest.FieldsEntry
+	0,  // 27: repeatertastic.plugin.v1.PluginHost.Session:input_type -> repeatertastic.plugin.v1.PluginMessage
+	23, // 28: repeatertastic.plugin.v1.PluginHost.ListRadios:input_type -> repeatertastic.plugin.v1.ListRadiosRequest
+	25, // 29: repeatertastic.plugin.v1.PluginHost.ListNodes:input_type -> repeatertastic.plugin.v1.ListNodesRequest
+	27, // 30: repeatertastic.plugin.v1.PluginHost.SendText:input_type -> repeatertastic.plugin.v1.SendTextRequest
+	28, // 31: repeatertastic.plugin.v1.PluginHost.Traceroute:input_type -> repeatertastic.plugin.v1.TracerouteRequest
+	30, // 32: repeatertastic.plugin.v1.PluginHost.ListSensors:input_type -> repeatertastic.plugin.v1.ListSensorsRequest
+	33, // 33: repeatertastic.plugin.v1.PluginHost.PublishSensor:input_type -> repeatertastic.plugin.v1.PublishSensorRequest
+	13, // 34: repeatertastic.plugin.v1.PluginHost.GetStatus:input_type -> repeatertastic.plugin.v1.GetStatusRequest
+	1,  // 35: repeatertastic.plugin.v1.PluginHost.Session:output_type -> repeatertastic.plugin.v1.HostMessage
+	24, // 36: repeatertastic.plugin.v1.PluginHost.ListRadios:output_type -> repeatertastic.plugin.v1.ListRadiosResponse
+	26, // 37: repeatertastic.plugin.v1.PluginHost.ListNodes:output_type -> repeatertastic.plugin.v1.ListNodesResponse
+	29, // 38: repeatertastic.plugin.v1.PluginHost.SendText:output_type -> repeatertastic.plugin.v1.SendResponse
+	29, // 39: repeatertastic.plugin.v1.PluginHost.Traceroute:output_type -> repeatertastic.plugin.v1.SendResponse
+	31, // 40: repeatertastic.plugin.v1.PluginHost.ListSensors:output_type -> repeatertastic.plugin.v1.ListSensorsResponse
+	34, // 41: repeatertastic.plugin.v1.PluginHost.PublishSensor:output_type -> repeatertastic.plugin.v1.PublishSensorResponse
+	14, // 42: repeatertastic.plugin.v1.PluginHost.GetStatus:output_type -> repeatertastic.plugin.v1.GetStatusResponse
+	35, // [35:43] is the sub-list for method output_type
+	27, // [27:35] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_plugin_v1_plugin_proto_init() }
@@ -2574,7 +2857,7 @@ func file_plugin_v1_plugin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_plugin_v1_plugin_proto_rawDesc), len(file_plugin_v1_plugin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   31,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

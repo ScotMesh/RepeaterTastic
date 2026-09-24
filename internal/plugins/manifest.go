@@ -30,6 +30,7 @@ var Permissions = map[string]string{
 	"messages.send":   "Send text messages from each radio's relay persona",
 	"traceroute.send": "Send traceroutes from the identity chosen in the plugin's settings (or the radio's relay persona)",
 	"status.read":     "See how the radios are doing: airtime, noise floor, channel use and the packet counters",
+	"sensors.publish": "Give readings to the host's push sensors, which the identities they are attached to publish as their own",
 }
 
 // Manifest is plugin.yaml.

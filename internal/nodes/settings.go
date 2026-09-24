@@ -37,7 +37,7 @@ func (n *Node) ApplyConfig(ctx context.Context, cfg mesh.Config) error {
 	fresh := !n.seeded(s)
 	n.mu.Lock()
 	in := settingsInput{cfg: cfg, s: s, host: n.host, id: n.id, owner: n.owner, seed: n.seed, board: n.extra != nil,
-		behind: n.hopsBehind, fresh: fresh}
+		behind: n.hopsBehind, fresh: fresh, senTel: n.senTel}
 	extra := n.extra
 	n.mu.Unlock()
 	in.relay = in.id == nil || in.id.IsRelay
@@ -156,6 +156,9 @@ type settingsInput struct {
 	board  bool   // the node is a board carrying identities over MQTT
 	behind uint32 // hops from the air
 	fresh  bool   // the node doesn't hold its saved key yet
+	// senTel says which telemetry the sensors the node carries need, and how often; nil leaves the
+	// node's telemetry modules as they are.
+	senTel *sensorTelemetry
 }
 
 func setConfig(c *pb.Config) *pb.AdminMessage {
@@ -237,7 +240,9 @@ func (in settingsInput) seedRole() string {
 }
 
 // telemetryMsgs turns device telemetry on for the relay (on the configured interval) and off for
-// identities.
+// identities, and the telemetry a node carrying sensors needs (environment, and air quality for
+// particulates) on or off. A node broadcasts its sensors itself, on its own schedule: RepeaterTastic
+// only keeps the file it reads up to date (docs/sensors.md).
 func (in settingsInput) telemetryMsgs() []*pb.AdminMessage {
 	tel := in.s.ModuleConfig.GetTelemetry()
 	if tel == nil {
@@ -247,6 +252,20 @@ func (in settingsInput) telemetryMsgs() []*pb.AdminMessage {
 	t.DeviceTelemetryEnabled = in.relay && in.cfg.TelemetryInterval > 0
 	if t.DeviceTelemetryEnabled {
 		t.DeviceUpdateInterval = uint32(in.cfg.TelemetryInterval / time.Second)
+	}
+	if sen := in.senTel; sen != nil {
+		// The air quality module carries the particulate values and has its own setting, which the
+		// firmware only acts on when it is already set as the node scans its bus (shim/README.md).
+		t.EnvironmentMeasurementEnabled = sen.env
+		t.AirQualityEnabled = sen.air
+		if secs := uint32(sen.every / time.Second); secs > 0 {
+			if sen.env {
+				t.EnvironmentUpdateInterval = secs
+			}
+			if sen.air {
+				t.AirQualityInterval = secs
+			}
+		}
 	}
 	if proto.Equal(t, tel) {
 		return nil

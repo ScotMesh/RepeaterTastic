@@ -150,6 +150,8 @@ holding up the radios; the number lost shows as `dropped_events` on its page.
 | `ListNodes` | `nodes.read` | `ListNodesRequest {radio_id}` → `ListNodesResponse {repeated Node nodes}` |
 | `SendText` | `messages.send` | `SendTextRequest` → `SendResponse {packet_id}` |
 | `Traceroute` | `traceroute.send` | `TracerouteRequest` → `SendResponse {}` |
+| `ListSensors` | `sensors.publish` | `ListSensorsRequest {}` → `ListSensorsResponse {repeated Sensor sensors}` |
+| `PublishSensor` | `sensors.publish` | `PublishSensorRequest {sensor_id, map<string,double> fields}` → `PublishSensorResponse {}` |
 
 Every call needs an open session (`FAILED_PRECONDITION` "open the Session stream first") and its
 permission (`PERMISSION_DENIED`).
@@ -214,6 +216,28 @@ Sends a traceroute from **the identity the operator chose** for the plugin on th
 | `PERMISSION_DENIED` | `from` isn't the chosen identity, or `plugins.traceroutes_per_hour` is 0 |
 | `FAILED_PRECONDITION` | the radio is in `monitor` or `off` mode |
 | `RESOURCE_EXHAUSTED` | the send budget is used up, or the radio refused it: one traceroute per identity every 30 seconds |
+
+### ListSensors and PublishSensor
+
+The host's sensors, and readings for the ones the operator made for pushing ([Sensors](sensors.md)).
+
+`Sensor {id, name, kind, map<string,double> fields, read_at_unix}` — `kind` is `push`, `exec` or
+`file`, and `fields` is its latest reading.
+
+`PublishSensor` gives a reading to a sensor whose `kind` is `push`. Field names are the Meshtastic
+ones — `temperature`, `humidity`, `lux`, `voltage`, `current`, `pm10`, `pm25`, `pm100`, `distance`,
+`radiation`, `rainfall_1h`, `rainfall_24h` — and any other name is ignored.
+
+Publishing transmits nothing, so it costs no send budget: the identities the operator attached the
+sensor to broadcast it themselves, on their own telemetry schedule, as their own sensor. A plugin
+can't create a sensor or choose who publishes it — that stays the operator's decision.
+
+| Code | When |
+| --- | --- |
+| `INVALID_ARGUMENT` | no such sensor, its kind isn't `push`, or no usable field was given |
+| `UNAVAILABLE` | this host has no sensors at all |
+
+The Go SDK wraps it: `c.PublishSensor(ctx, "weather", map[string]float64{"temperature": 18.4})`.
 
 ### Send budget
 
@@ -403,6 +427,8 @@ missing or it has no program for the host's OS and CPU. A bundle is also refused
 | `messages.read` | receive `TextMessageEvent`s: text messages to and from each radio's relay persona |
 | `messages.send` | call `SendText` from each radio's relay persona |
 | `traceroute.send` | call `Traceroute` from the identity chosen in the plugin's settings (or the radio's relay persona), and receive `TracerouteEvent`s |
+| `status.read` | call `GetStatus`: airtime, noise floor, channel use and the packet counters |
+| `sensors.publish` | call `ListSensors` and `PublishSensor`: give readings to the host's push sensors, which identities publish as their own |
 
 The operator may untick any of them. Check `Welcome.permissions` and cope with a missing one. A
 new version that asks for more waits for the operator to review them.
