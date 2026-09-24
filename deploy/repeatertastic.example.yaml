@@ -123,6 +123,35 @@ plugins:
     messages_per_hour: 30         # per plugin, sent from a relay persona; 0 = never
     traceroutes_per_hour: 12
 
+# Sensors: a reading this host has, published by whichever identities you choose as if each owned
+# the sensor itself (docs/sensors.md). RepeaterTastic never sends the telemetry packet — the
+# identity's own meshtasticd reads the value and broadcasts it, so one sensor can appear on as many
+# identities as you like. Everything here is also editable in the GUI (Sensors), which saves it back
+# to this file.
+# sensors:
+#     interval: 1h              # how often each identity broadcasts environment telemetry; min 30m
+#     sources:
+#         - id: shed            # names it in the GUI, the API and attach below
+#           name: Shed
+#           kind: exec          # exec (run a command) | file (read a file) | push (API or plugin)
+#           command: /usr/local/bin/read-shed   # prints "temperature=18.4" lines on stdout
+#           interval: 5m        # how often we read it; at least 5s
+#         - id: rack
+#           name: Rack PSU
+#           kind: file
+#           path: /run/rack-psu.values
+#           interval: 30s
+#           scale: {current: 0.001}   # source reports mA; multiply as it arrives
+#         - id: weather
+#           kind: push          # something else POSTs /api/sensors/weather/push
+#     attach:
+#         - sensor: shed
+#           identities: [BASE, "!a1c40e07"]   # short names, node ids, or [all]
+#           fields: [temperature, humidity]   # empty = everything the source reports
+#         - sensor: rack
+#           identities: [all]
+#           fields: [voltage, current]
+
 # Features still being proven; all off by default.
 # experimental:
 #   multi_radio_identities: false   # identities on several radios: each channel slot on one radio (docs/radios.md)

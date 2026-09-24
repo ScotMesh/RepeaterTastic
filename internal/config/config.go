@@ -39,6 +39,9 @@ type Config struct {
 	Site   Site            `yaml:"site,omitempty" json:"site,omitempty"`
 	// Plugins are separate programs that extend RepeaterTastic (docs/plugins.md).
 	Plugins Plugins `yaml:"plugins" json:"plugins"`
+
+	// Sensors offer host readings to hosted identities as their own sensors (docs/sensors.md).
+	Sensors Sensors `yaml:"sensors,omitempty" json:"sensors"`
 	// Hosted says how meshtasticd runs the nodes (docs/meshtasticd-nodes.md).
 	Hosted Hosted `yaml:"hosted,omitempty" json:"hosted"`
 
@@ -682,6 +685,9 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("plugins.entries: every entry needs a unique id (%q)", e.ID)
 		}
 		seen[e.ID] = true
+	}
+	if err := c.validateSensors(); err != nil {
+		return err
 	}
 	return c.validateRadios()
 }
