@@ -19,18 +19,25 @@ go vet ./... && go test ./...        # must pass before every commit
 go test -race ./...                  # for changes to internal/mesh, internal/site, internal/links
 make lint                            # golangci-lint (.golangci.yml) and vue-tsc; must report 0 issues
 cd ui && npm ci && npm run build     # vue-tsc + vite; writes internal/web/dist (commit it)
+make shim && make shim-test          # the hosted-node I²C shim (shim/build is committed)
 make build | make dist               # binaries; MAP_API_KEY=... bakes in the map tile key
 docker build -t repeatertastic .     # container image
 RT_TEST_MQTT_BROKER=host:1883 go test ./internal/links/mqtt   # MQTT against a real broker
 ```
 
 `internal/web/dist` is committed: any change under `ui/` needs `npm run build` and the rebuilt
-`dist` in the same commit, or the daemon serves the old GUI.
+`dist` in the same commit, or the daemon serves the old GUI. `shim/build/*.so` is committed the same
+way and for the same reason — the daemon embeds it — so a change to `shim/*.c` needs `make shim` and
+the rebuilt libraries in the same commit.
 
 ## Layout
 
 - `cmd/repeatertastic` daemon entry point (flags, env overrides, radio start-up, starting each
   radio's meshtasticd nodes).
+- `internal/sensors` host sensor sources and the values file each hosted node reads; `shim/` is the
+  I²C shim that makes a stock meshtasticd believe those sensors are its own (`docs/sensors.md`).
+  Sensors are configured in one place: the `sensors:` section of the config file, which the GUI edits
+  and saves. Never add a second store for them.
 - `internal/mesh` the host: identities, node DB, transmit queue and duty cycle, receive (dedupe,
   log, feed the links), site joins for sightings across a mast (`site.go`). It no longer transmits,
   relays, ACKs or broadcasts NodeInfo/position/telemetry itself — meshtasticd does.

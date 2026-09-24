@@ -10,10 +10,14 @@ package sensors
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 )
+
+// idRE is what a sensor id may look like: it names a file and appears in URLs.
+var idRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // Field is a reading we can carry, named as Meshtastic names it.
 type Field string
@@ -110,8 +114,9 @@ func (s *Source) Validate() error {
 	if s.ID == "" {
 		return fmt.Errorf("a sensor needs an id")
 	}
-	if strings.ContainsAny(s.ID, " /\\\t") {
-		return fmt.Errorf("sensor id %q: use letters, digits and dashes", s.ID)
+	// An id names a file in a node's directory, so keep it to something safe to put in a path.
+	if !idRE.MatchString(s.ID) || strings.Contains(s.ID, "..") {
+		return fmt.Errorf("sensor id %q: start with a letter or digit, then letters, digits, dashes, underscores or dots", s.ID)
 	}
 	if s.Name == "" {
 		s.Name = s.ID
