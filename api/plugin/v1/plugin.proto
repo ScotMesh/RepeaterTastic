@@ -25,6 +25,10 @@ service PluginHost {
   // traceroute.send: from the identity chosen in the plugin's "identities" settings on that radio
   // (the relay persona when none is), within the plugin's send budget.
   rpc Traceroute(TracerouteRequest) returns (SendResponse);
+  // sensors.publish: list the host's sensors, and give a reading to one of kind "push". The
+  // identities it is attached to then broadcast it as their own sensor (docs/sensors.md).
+  rpc ListSensors(ListSensorsRequest) returns (ListSensorsResponse);
+  rpc PublishSensor(PublishSensorRequest) returns (PublishSensorResponse);
   // status.read: how the radios are doing right now. Radio says what a radio *is*; this says what
   // it is *doing* — the figures a dashboard, an exporter or an alert would want.
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
@@ -263,3 +267,24 @@ message TracerouteRequest {
 message SendResponse {
   uint32 packet_id = 1;
 }
+
+message ListSensorsRequest {}
+message ListSensorsResponse { repeated Sensor sensors = 1; }
+
+// Sensor is one of the host's sensors. A plugin may publish to those whose kind is "push".
+message Sensor {
+  string id = 1;
+  string name = 2;
+  string kind = 3;                  // push | exec | file
+  map<string, double> fields = 4;   // its latest reading, field name to value
+  int64 read_at_unix = 5;           // when that reading was taken (0 = never read)
+}
+
+message PublishSensorRequest {
+  string sensor_id = 1;             // the id of a sensor whose kind is "push"
+  // fields are Meshtastic names: temperature, humidity, lux, voltage, current, pm10, pm25, pm100,
+  // distance, radiation, rainfall_1h, rainfall_24h (docs/sensors.md). Unknown names are ignored.
+  map<string, double> fields = 2;
+}
+
+message PublishSensorResponse {}

@@ -33,13 +33,17 @@ type apiEnv struct {
 	ctx    context.Context
 }
 
-func newAPIEnv(t *testing.T) *apiEnv {
+func newAPIEnv(t *testing.T, with ...func(*Options)) *apiEnv {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	host, _, node := relayHost(t, ctx, quietLog())
 	cfg := config.Default().Plugins
 	cfg.Listen = "127.0.0.1:0"
-	m, err := New(Options{Config: cfg, Dir: shortPluginDir(t), Radios: []Radio{{ID: "main", Name: "Main", Host: host}}, Version: "test", Log: quietLog()})
+	o := Options{Config: cfg, Dir: shortPluginDir(t), Radios: []Radio{{ID: "main", Name: "Main", Host: host}}, Version: "test", Log: quietLog()}
+	for _, f := range with {
+		f(&o)
+	}
+	m, err := New(o)
 	if err != nil {
 		t.Fatal(err)
 	}
