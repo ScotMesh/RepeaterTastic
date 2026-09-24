@@ -684,6 +684,10 @@ export interface SensorsResponse {
   /** How often a node broadcasts its telemetry, a Go duration. */
   interval?: string
   fields?: SensorFieldInfo[]
+  /** Whether nodes on this machine can be given sensors (the shim is built per architecture). */
+  can_publish?: boolean
+  /** Why they can't, when they can't. */
+  cannot_publish_why?: string
 }
 
 /** What one identity publishes (GET/PUT /identities/{id}/sensors). Empty fields means everything. */

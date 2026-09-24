@@ -113,6 +113,11 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <div
+      v-if="data?.enabled && data.can_publish === false"
+      class="rounded-lg bg-warn/10 px-3 py-2 text-xs text-warn"
+    >{{ data.cannot_publish_why }}</div>
+
     <div v-if="!data" class="grid gap-4 md:grid-cols-2">
       <div v-for="n in 2" :key="n" class="card h-32 animate-pulse" />
     </div>

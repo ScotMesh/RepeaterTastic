@@ -635,7 +635,7 @@ the node ids publishing it.
 
 | Method and path | Body → response |
 | --- | --- |
-| `GET /sensors` | → `{"sensors": [Sensor], "interval": "1h0m0s", "fields": [{"field", "unit", "chip"}]}` |
+| `GET /sensors` | → `{"enabled", "sensors": [Sensor], "interval": "1h0m0s", "fields": [{"field", "unit", "chip"}], "can_publish"}` |
 | `POST /sensors` | `{"id", "name", "kind", "command", "path", "interval", "scale"}` → the Sensor (409 if the id is taken) |
 | `PUT /sensors/{id}` | the same → the Sensor |
 | `DELETE /sensors/{id}` | → `{"ok": true}`, and detaches it from every identity |
@@ -647,6 +647,9 @@ the node ids publishing it.
 | `PUT /identities/{id}/sensors` | `[{"sensor", "fields"}]` → the same, and restarts that identity's node |
 
 - `interval` fields are Go durations (`"5m"`, `"30s"`); a sensor is read no more often than every 5 s.
+- `can_publish` is false when this build carries no I²C shim for the machine's architecture, with
+  `cannot_publish_why` saying so: sensors still read and can be pushed to, but no node can be given
+  one. The shim is built per architecture (`make shim`, see [Sensors](sensors.md#how-the-shim-works)).
 - `fields` in `GET /sensors` is the catalogue the GUI offers: every field, its unit, and the chip the
   node will think it has. A field no chip can carry is refused with 400.
 - `PUT /identities/{id}/sensors` bounces that identity's meshtasticd, because it only scans for

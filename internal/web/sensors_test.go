@@ -623,3 +623,22 @@ func TestConcurrentSensorAddsAllSurvive(t *testing.T) {
 		t.Errorf("config file holds %d sensors, the API reports %d", len(saved.Sources), len(got))
 	}
 }
+
+// The list says whether nodes on this machine can be given sensors at all, so the GUI can warn
+// before someone attaches one and waits for telemetry that will never come.
+func TestListSaysWhetherNodesCanCarrySensors(t *testing.T) {
+	env := newSensorEnv(t)
+	code, obj, _ := call(t, env.srv, "GET", "/api/v1/sensors", env.tok, nil)
+	if code != http.StatusOK {
+		t.Fatalf("list: %d", code)
+	}
+	can, ok := obj["can_publish"].(bool)
+	if !ok {
+		t.Fatalf("can_publish missing from %v", obj)
+	}
+	// This build either carries a shim for the machine running the tests or it doesn't; either way
+	// the answer and its explanation must agree.
+	if why, hasWhy := obj["cannot_publish_why"]; can == hasWhy {
+		t.Errorf("can_publish=%v with reason %v: one of them is wrong", can, why)
+	}
+}

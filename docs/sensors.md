@@ -210,6 +210,14 @@ replays the firmware's exact call sequences.
 
 ## Troubleshooting
 
+**Nothing can be attached at all.** The Sensors page says so at the top when this build has no shim
+for the machine's architecture — amd64, arm64 and armv7 are built; an armv6 Pi isn't. Sensors still
+read and can be pushed to; they just can't be given to a node.
+
+**A node came up without its sensors.** If the shim can't be unpacked into a node's directory (no
+library for this architecture, a full or read-only disk), the identity starts anyway, without them,
+and says so in its log. Being on the mesh matters more than carrying a thermometer.
+
 **The node never sends telemetry.** Check the identity is actually hosted (`meshtasticd`, not a
 virtual identity) and that it restarted after the sensor was attached. The node log line to look for
 is the sensor being detected at start-up.

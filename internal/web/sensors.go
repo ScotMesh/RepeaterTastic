@@ -7,12 +7,14 @@ package web
 import (
 	"context"
 	"net/http"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/ScotMesh/RepeaterTastic/internal/config"
 	"github.com/ScotMesh/RepeaterTastic/internal/mesh"
+	"github.com/ScotMesh/RepeaterTastic/internal/nodes"
 	"github.com/ScotMesh/RepeaterTastic/internal/sensors"
 )
 
@@ -147,8 +149,15 @@ func (s *Server) listSensors(w http.ResponseWriter, r *http.Request) {
 	s.cfgMu.Lock()
 	iv := s.cfg.Sensors.SensorInterval()
 	s.cfgMu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": true, "sensors": list,
-		"interval": iv.String(), "fields": sensorFieldCatalogue()})
+	out := map[string]any{"enabled": true, "sensors": list, "interval": iv.String(),
+		"fields": sensorFieldCatalogue(), "can_publish": nodes.HasShim()}
+	if !nodes.HasShim() {
+		// Say it here rather than let someone attach a sensor and wonder why no node ever carries
+		// it: the library a node preloads is built per architecture (shim/README.md).
+		out["cannot_publish_why"] = "this build carries no I²C shim for " + runtime.GOOS + "/" + runtime.GOARCH +
+			", so nodes can't be given sensors on this machine; sensors still read and can be pushed to"
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) sensorHistory(w http.ResponseWriter, r *http.Request) {

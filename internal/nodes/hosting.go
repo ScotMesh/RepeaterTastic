@@ -118,7 +118,11 @@ func (x *Hosting) HostIdentity(ctx context.Context, h *mesh.Host, rec mesh.Ident
 	}
 	plan := x.planFor(rec.ShortName, wire.NodeID(num), logf)
 	if err := seedSensors(x.opts.Launcher, &in, x.opts.Sensors, plan); err != nil {
-		return nil, err
+		// Being on the mesh matters more than carrying a sensor: say what went wrong and bring the
+		// identity up without it, rather than leaving it off air over a thermometer. Attaching one
+		// from the GUI is the other way round — that request fails and says so.
+		logf("sensors: %v; starting this node without them", err)
+		plan, in.Env, in.Sensors = nil, nil, nil
 	}
 	hn, err := StartHosted(x.ctx, x.opts.Launcher, in, logf)
 	if err != nil {

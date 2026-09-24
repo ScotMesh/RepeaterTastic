@@ -2,6 +2,8 @@ package nodes
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -523,5 +525,54 @@ func TestRestartUnknownNode(t *testing.T) {
 	}
 	if err := x.Restart(" "); err == nil || !strings.Contains(err.Error(), "which identity") {
 		t.Fatalf("Restart(\"\") = %v", err)
+	}
+}
+
+// A build with no shim for this architecture, or an instance directory that can't be written, must
+// not keep an identity off the mesh: it comes up without its sensors and says why.
+func TestIdentityStartsWhenItsSensorsCannot(t *testing.T) {
+	prev := shimLibrary
+	shimLibrary = func() ([]byte, error) { return nil, errors.New("no I²C shim for linux/mips") }
+	t.Cleanup(func() { shimLibrary = prev })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h, err := mesh.NewHost(mesh.Config{Region: "EU_868", Preset: pb.Config_LoRaConfig_LONG_FAST, StateDir: t.TempDir()},
+		null.New(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := newFakeSensors()
+	src.read("shed", map[sensors.Field]float64{sensors.Temperature: 19})
+	src.attach["SHED"] = []sensors.Attachment{{Sensor: "shed", Fields: []sensors.Field{sensors.Temperature}}}
+
+	// The node logs from its own goroutine as well as ours, so the sink is locked.
+	var logMu sync.Mutex
+	var logged []string
+	x := NewHosting(ctx, HostingOptions{Launcher: &fakeLauncher{}, Air: NewLoRaAir(h, nil), Radio: "main",
+		Dir: t.TempDir(), PortBase: 45700, Sensors: src,
+		Logf: func(f string, a ...any) {
+			logMu.Lock()
+			logged = append(logged, fmt.Sprintf(f, a...))
+			logMu.Unlock()
+		}})
+
+	shed, _ := mesh.NewIdentity(nil, "Shed Watch", "SHED")
+	id, err := x.HostIdentity(ctx, h, shed.Record())
+	if err != nil || id == nil {
+		t.Fatalf("the identity stayed off air over a sensor: %v", err)
+	}
+	nodes := x.Nodes()
+	if len(nodes) != 1 {
+		t.Fatalf("hosted nodes = %d, want the identity running", len(nodes))
+	}
+	if got := nodes[0].Sensors; len(got) != 0 {
+		t.Errorf("node carries %v, want nothing: the shim could not be unpacked", got)
+	}
+	logMu.Lock()
+	lines := strings.Join(logged, "\n")
+	logMu.Unlock()
+	if !strings.Contains(lines, "starting this node without them") {
+		t.Errorf("logged %q, want a line saying the node came up without its sensors", lines)
 	}
 }
