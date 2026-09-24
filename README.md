@@ -187,6 +187,7 @@ field is a chip model in `shim/i2cshim.c`.
 | [Plugin API](docs/plugin-api.md) | Reference for plugin authors: the gRPC session, calls, events, errors, manifest and settings |
 | [HTTP API](docs/api.md) | REST and event-stream API for scripts and integrations |
 | [Bench test](docs/bench-test.md) | Step-by-step first test on a real radio |
+| [Changelog](CHANGELOG.md) | What changed in each release |
 | [AGENTS.md](AGENTS.md) | Rules and commands for coding agents and contributors |
 
 ## Licence

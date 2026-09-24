@@ -25,6 +25,9 @@ docker build -t repeatertastic .     # container image
 RT_TEST_MQTT_BROKER=host:1883 go test ./internal/links/mqtt   # MQTT against a real broker
 ```
 
+`CHANGELOG.md` gets an entry per release, written when the release is cut, in the same voice as the
+rest of the docs: what changed for the operator, not a list of commits.
+
 `internal/web/dist` is committed: any change under `ui/` needs `npm run build` and the rebuilt
 `dist` in the same commit, or the daemon serves the old GUI. `internal/nodes/shim/*.so` is committed the
 same way and for the same reason — the daemon embeds it — so a change to `shim/*.c` needs
