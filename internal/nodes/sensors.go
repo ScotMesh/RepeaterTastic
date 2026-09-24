@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/ScotMesh/RepeaterTastic/internal/sensors"
@@ -177,6 +178,13 @@ func planSensors(src SensorSource, atts []sensors.Attachment, logf func(string, 
 	}
 	sortFields(p.Fields)
 	p.Chips, _ = sensors.PlanChips(p.Fields)
+	// The API and the config file refuse this, but an attachment that publishes "whatever the
+	// source reports" only resolves here, so say it plainly rather than let a made-up reading go
+	// out unremarked.
+	for _, f := range sensors.Invents(p.Fields) {
+		logf("sensors: this node will also publish %s, which nothing here measures: a %s reports one whether we ask or not. Attach a %s reading to stop it being invented.",
+			f, strings.Join(sensors.Carriers(f), " or a "), f)
+	}
 	return p
 }
 

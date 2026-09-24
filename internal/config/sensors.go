@@ -112,6 +112,35 @@ func (c *Config) validateSensors() error {
 			return err
 		}
 	}
+	return c.validateNothingInvented()
+}
+
+// validateNothingInvented refuses a config where an identity would publish a reading nobody attached
+// to it: a barometer and a humidity sensor both measure temperature, and the node sends what they
+// report. Attachments are grouped by the name they were written under, which is how a person reads
+// the file; an attachment with no fields listed publishes whatever its source reports, so those
+// identities are left to the running node, which warns in the log.
+func (c *Config) validateNothingInvented() error {
+	byIdentity := map[string][]sensors.Field{}
+	open := map[string]bool{}
+	for _, a := range c.Sensors.Attach {
+		for _, name := range a.Identities {
+			name = strings.TrimSpace(name)
+			if len(a.Fields) == 0 {
+				open[name] = true
+			}
+			byIdentity[name] = append(byIdentity[name], a.Fields...)
+		}
+	}
+	for name, fields := range byIdentity {
+		if open[name] {
+			continue
+		}
+		for _, f := range sensors.Invents(fields) {
+			return fmt.Errorf("sensors.attach: %s would broadcast a %s nobody gave it, because a %s reports one too; attach a %s reading to it as well",
+				name, f, strings.Join(sensors.Carriers(f), " or a "), f)
+		}
+	}
 	return nil
 }
 

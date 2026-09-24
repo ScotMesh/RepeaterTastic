@@ -266,6 +266,26 @@ static int scan(uint8_t *found, int max)
 /* How many chips I2CSHIM_CHIPS asked for, so the scan check follows the run. */
 static int g_want_chips = 5;
 
+/* The readings every check starts from. A check that changes the file puts these
+ * back, so the checks after it still see what they expect. */
+static void put_standard_values(void)
+{
+    put_values("# the shim re-reads this on every access\n"
+               "temperature = 23.5\n"
+               "humidity = 61.5\n"
+               "voltage = 4.05\n"
+               "current = 0.15\n"
+               "pm10 = 12\n"
+               "pm25 = 34\n"
+               "pm100 = 56\n"
+               "lux = 480.5\n"
+               "distance = 1234.5\n"
+               "radiation = 13.7\n"
+               "rainfall_1h = 2.5\n"
+               "rainfall_24h = 17.25\n"
+               "pressure = 1007.75\n");
+}
+
 /* ---- checks ------------------------------------------------------------- */
 static void check_scan(void)
 {
@@ -670,6 +690,39 @@ static void check_bmp280(double want_hpa, double want_temp)
     OKF(near(p / 100.0, want_hpa, 0.02), "pressure compensates", "%.3f hPa (want %.2f)", p / 100.0, want_hpa);
 }
 
+/* A hilltop in January: adc_T is unsigned, so the model shifts its zero point and
+ * has to come back negative. */
+static void check_bmp280_below_zero(void)
+{
+    printf("\n== BMP280 below zero ==\n");
+    put_values("pressure = 989.5\ntemperature = -8.75\n");
+    uint8_t cal[6], d[6];
+    beginTransmission(0x76);
+    w8(0x88);
+    endTransmission(0);
+    requestFrom(0x76, sizeof(cal));
+    for (size_t i = 0; i < sizeof(cal); i++)
+        cal[i] = (uint8_t)rd();
+    uint16_t dig_T1 = (uint16_t)(cal[0] | (cal[1] << 8));
+    int16_t dig_T2 = (int16_t)(cal[2] | (cal[3] << 8));
+
+    beginTransmission(0x76);
+    w8(0xF7);
+    endTransmission(0);
+    requestFrom(0x76, sizeof(d));
+    for (size_t i = 0; i < sizeof(d); i++)
+        d[i] = (uint8_t)rd();
+    int32_t adc_T = (int32_t)(((uint32_t)d[3] << 12) | ((uint32_t)d[4] << 4) | (d[5] >> 4));
+    double t_fine = ((adc_T / 16384.0) - (dig_T1 / 1024.0)) * dig_T2; /* dig_T3 is zero */
+    OKF(near(t_fine / 5120.0, -8.75, 0.02), "a temperature below zero survives", "%.3f C (want -8.75)",
+        t_fine / 5120.0);
+
+    int32_t adc_P = (int32_t)(((uint32_t)d[0] << 12) | ((uint32_t)d[1] << 4) | (d[2] >> 4));
+    double p = (1048576.0 - (double)adc_P) * 6250.0 / 6250.0;
+    OKF(near(p / 100.0, 989.5, 0.02), "and the pressure with it", "%.3f hPa (want 989.50)", p / 100.0);
+    put_standard_values();
+}
+
 /*
  * Why radiation is not in the supported list. The shim answers a RadSens read
  * correctly, but Portduino buffers received bytes in a plain `char RXbuf[1000]`
@@ -751,6 +804,7 @@ int main(int argc, char **argv)
     check_dfrobot_rain(2.5, 17.25);
     check_lps22(1007.75, 23.5);
     check_bmp280(1007.75, 23.5);
+    check_bmp280_below_zero();
     check_signed_byte();
     check_regptr();
     check_read_chk();

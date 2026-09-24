@@ -381,6 +381,8 @@ func TestIdentitySensorsRefusals(t *testing.T) {
 		{"no such sensor", []map[string]any{{"sensor": "ghost"}}, "no sensor called ghost"},
 		{"no chip carries it", []map[string]any{{"sensor": "shed", "fields": []string{"radiation"}}}, "no node can publish radiation"},
 		{"unknown field", []map[string]any{{"sensor": "shed", "fields": []string{"loudness"}}}, "no reading called loudness"},
+		{"pressure without a temperature", []map[string]any{{"sensor": "shed", "fields": []string{"pressure"}}},
+			"would broadcast a temperature nobody gave it"},
 		{"twice", []map[string]any{{"sensor": "shed"}, {"sensor": "shed"}}, "listed twice"},
 	}
 	for _, tc := range cases {

@@ -109,6 +109,13 @@ Every one of those has been watched arriving at an app connected to a stock mesh
 implemented. `lux` is the only one that isn't exact: a BH1750 counts in units of 1/1.2 lx, so 480.5
 comes back as 480.83 — the real sensor has the same resolution.
 
+**Some chips report more than you asked for.** A barometer and a humidity sensor both measure
+temperature to compensate their own readings, and the node publishes whatever they report. So
+attaching `pressure` or `humidity` to an identity without also attaching a `temperature` reading is
+refused: the node would otherwise broadcast a temperature nobody measured. Attach a temperature from
+any source and it publishes a real one. (Proven the hard way: a node given pressure alone broadcast
+`temperature: 20.0` — the shim's own default — onto the mesh.)
+
 **`radiation` is the one field still missing**, and not for want of a chip. The shim imitates a
 ClimateGuard RadSens correctly — you can watch it put the right bytes on the bus — but Portduino
 buffers received bytes in a `char RXbuf[1000]` and hands them back as a signed `int`, so every byte

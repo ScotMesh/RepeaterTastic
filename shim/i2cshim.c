@@ -671,9 +671,9 @@ static size_t model_cgradsens(int reg, uint8_t *tmp, size_t len)
         double uR = value_or("radiation", 0.0);
         if (uR < 0.0)
             uR = 0.0;
+        if (uR > 1677721.5) /* 0xFFFFFF counts of 0.1 uR/h, clamped before the cast */
+            uR = 1677721.5;
         uint32_t d = (uint32_t)lround(uR * 10.0);
-        if (d > 0xFFFFFF)
-            d = 0xFFFFFF;
         tmp[0] = (uint8_t)(d >> 16);
         tmp[1] = (uint8_t)(d >> 8);
         tmp[2] = (uint8_t)d;
@@ -690,9 +690,9 @@ static size_t model_cgradsens(int reg, uint8_t *tmp, size_t len)
     double uR = value_or("radiation", 0.0);
     if (uR < 0.0)
         uR = 0.0;
+    if (uR > 1677721.5)
+        uR = 1677721.5;
     uint32_t data = (uint32_t)lround(uR * 10.0);
-    if (data > 0xFFFFFF)
-        data = 0xFFFFFF;
     tmp[0] = (uint8_t)(data >> 16);
     tmp[1] = (uint8_t)(data >> 8);
     tmp[2] = (uint8_t)data;
@@ -779,6 +779,8 @@ static size_t model_lps22(int addr, int reg, uint8_t *tmp, size_t len)
         double hPa = value_or("pressure", 1013.25);
         if (hPa < 0.0)
             hPa = 0.0;
+        if (hPa > 4095.0) /* clamp before the cast: lround returns a 32-bit long on armv7 */
+            hPa = 4095.0;
         int32_t raw = (int32_t)lround(hPa * 4096.0);
         tmp[0] = (uint8_t)raw;
         tmp[1] = (uint8_t)(raw >> 8);
@@ -827,8 +829,13 @@ static void bmp280_image(uint8_t *img)
     img[0xD0] = 0x58; /* chip id */
     img[0x00] = 0x58; /* the scan falls back to register 0x00 for the BMP family */
 
-    /* calibration, little-endian words at 0x88 */
-    const uint16_t dig_T1 = 0, dig_P1 = 6250;
+    /* Calibration, little-endian words at 0x88. dig_T1 is not zero: it shifts the
+     * temperature's zero point, because adc_T is an unsigned 20-bit count and a
+     * hilltop in January is below zero. With dig_T1 = 16384 the firmware computes
+     * t_fine = adc_T - 16*dig_T1, so adc_T = degC*5120 + 262144 covers -51.2 to
+     * +153.6 degC. Pressure is unaffected: its coefficients are zero, so t_fine
+     * never reaches the pressure result. */
+    const uint16_t dig_T1 = 16384, dig_P1 = 6250;
     const int16_t dig_T2 = 16384, dig_T3 = 0;
     img[0x88] = (uint8_t)dig_T1;
     img[0x89] = (uint8_t)(dig_T1 >> 8);
@@ -852,9 +859,9 @@ static void bmp280_image(uint8_t *img)
     uint32_t p20 = (uint32_t)llround(adc_p);
 
     double degC = value_or("temperature", 20.0);
-    double adc_t = degC * 5120.0;
+    double adc_t = degC * 5120.0 + 16.0 * (double)dig_T1;
     if (adc_t < 0.0)
-        adc_t = 0.0; /* the compensation is linear, but the register is unsigned */
+        adc_t = 0.0;
     if (adc_t > 1048575.0)
         adc_t = 1048575.0;
     uint32_t t20 = (uint32_t)llround(adc_t);

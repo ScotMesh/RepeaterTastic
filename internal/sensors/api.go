@@ -164,6 +164,10 @@ type Chip struct {
 	Name   string  // as the shim's I2CSHIM_CHIPS knows it
 	Addr   uint8   // its I²C address
 	Fields []Field // what it can carry
+	// Also are fields this chip publishes whether or not anyone asked for them: a barometer
+	// measures temperature to compensate its own reading, and the firmware sends that too. A node
+	// must have a real reading for these, or it would broadcast one we invented.
+	Also []Field
 }
 
 // Chips are the imitations the shim implements, in the order they are planned. Exactly one chip owns
@@ -176,14 +180,50 @@ type Chip struct {
 // sign-extends any byte over 0x7F (char RXbuf in Portduino's LinuxHardwareI2C), so most values come
 // out as nonsense. shim/README.md has the detail; the chip model is written and waiting.
 var Chips = []Chip{
-	{"pct2075", 0x37, []Field{Temperature}},
-	{"aht10", 0x38, []Field{Humidity}},
-	{"bmp280", 0x76, []Field{Pressure}},
-	{"bh1750", 0x23, []Field{Lux}},
-	{"pmsa003i", 0x12, []Field{PM10, PM25, PM100}},
-	{"ina226", 0x40, []Field{Voltage, Current}},
-	{"rcwl9620", 0x57, []Field{Distance}},
-	{"dfrobot_rain", 0x1D, []Field{Rainfall1h, Rainfall24h}},
+	{Name: "pct2075", Addr: 0x37, Fields: []Field{Temperature}},
+	{Name: "aht10", Addr: 0x38, Fields: []Field{Humidity}, Also: []Field{Temperature}},
+	{Name: "bmp280", Addr: 0x76, Fields: []Field{Pressure}, Also: []Field{Temperature}},
+	{Name: "bh1750", Addr: 0x23, Fields: []Field{Lux}},
+	{Name: "pmsa003i", Addr: 0x12, Fields: []Field{PM10, PM25, PM100}},
+	{Name: "ina226", Addr: 0x40, Fields: []Field{Voltage, Current}},
+	{Name: "rcwl9620", Addr: 0x57, Fields: []Field{Distance}},
+	{Name: "dfrobot_rain", Addr: 0x1D, Fields: []Field{Rainfall1h, Rainfall24h}},
+}
+
+// Invents lists what a node carrying these fields would publish that nobody asked for. A barometer
+// and a humidity sensor both measure temperature, and the firmware sends whatever they report — so
+// attaching pressure without temperature would put a made-up temperature on the mesh. Attach the
+// missing field as well and the node publishes a real one.
+func Invents(fields []Field) []Field {
+	has := map[Field]bool{}
+	for _, f := range fields {
+		has[f] = true
+	}
+	chips, _ := PlanChips(fields)
+	var out []Field
+	for _, c := range chips {
+		for _, f := range c.Also {
+			if !has[f] {
+				has[f] = true // named once, however many chips report it
+				out = append(out, f)
+			}
+		}
+	}
+	return out
+}
+
+// Carriers names the chips that would report f, for an error message that says why.
+func Carriers(f Field) []string {
+	var out []string
+	for _, c := range Chips {
+		for _, cf := range append(append([]Field{}, c.Fields...), c.Also...) {
+			if cf == f {
+				out = append(out, c.Name)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // Publishable lists the fields an identity can publish today, in Fields order: those an imitated

@@ -114,3 +114,19 @@ func TestSensorsRoundTrip(t *testing.T) {
 		t.Fatalf("round trip lost something: %+v", back.Sensors)
 	}
 }
+
+// An identity that would broadcast a reading nobody gave it is refused, naming the chip that
+// reports it and what to do about it.
+func TestSensorsRefuseInventedReadings(t *testing.T) {
+	expectLoadErrors(t, map[string]string{
+		"sensors:\n    sources:\n        - {id: baro, kind: push}\n    attach:\n        - {sensor: baro, identities: [BASE], fields: [pressure]}\n": "BASE would broadcast a temperature nobody gave it",
+		"sensors:\n    sources:\n        - {id: hyg, kind: push}\n    attach:\n        - {sensor: hyg, identities: [all], fields: [humidity]}\n":    "would broadcast a temperature",
+	})
+	// With a temperature attached as well — from either source — it is fine.
+	expectLoadOK(t,
+		"sensors:\n    sources:\n        - {id: baro, kind: push}\n    attach:\n        - {sensor: baro, identities: [BASE], fields: [pressure, temperature]}\n",
+		"sensors:\n    sources:\n        - {id: baro, kind: push}\n        - {id: t, kind: push}\n    attach:\n        - {sensor: baro, identities: [BASE], fields: [pressure]}\n        - {sensor: t, identities: [BASE], fields: [temperature]}\n",
+		// "everything the source reports" can't be checked here; the node warns instead.
+		"sensors:\n    sources:\n        - {id: baro, kind: push}\n    attach:\n        - {sensor: baro, identities: [BASE]}\n",
+	)
+}

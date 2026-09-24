@@ -635,7 +635,31 @@ func (s *Server) wantedAttachments(req []attachReq) ([]sensors.Attachment, error
 		}
 		out = append(out, sensors.Attachment{Sensor: a.Sensor, Fields: fields})
 	}
+	if err := checkNothingInvented(out); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// checkNothingInvented refuses a set that would have the node publish a reading nobody attached: a
+// barometer and a humidity sensor both measure temperature, and the firmware sends what they report,
+// so the node would broadcast a made-up one. An attachment with no fields of its own publishes
+// whatever its source reports, which isn't known until it is read, so those are left to the node,
+// which logs a warning instead.
+func checkNothingInvented(atts []sensors.Attachment) error {
+	var all []sensors.Field
+	for _, a := range atts {
+		if len(a.Fields) == 0 {
+			return nil
+		}
+		all = append(all, a.Fields...)
+	}
+	for _, f := range sensors.Invents(all) {
+		return errStatus(http.StatusBadRequest, "a "+strings.Join(sensors.Carriers(f), " or a ")+
+			" reports "+string(f)+" as well, so this identity would broadcast a "+string(f)+
+			" nobody gave it; attach a "+string(f)+" reading to it too")
+	}
+	return nil
 }
 
 // otherIdentityIDs is every identity on the host except one, by node id: what "all" has to be

@@ -40,3 +40,37 @@ func TestPublishableMatchesTheChips(t *testing.T) {
 		}
 	}
 }
+
+// A barometer and a humidity sensor both measure temperature, and the firmware publishes what they
+// report — so planning either without a temperature reading would put an invented one on the mesh.
+// Proven on a real node: pressure alone broadcast {'temperature': 20.0, pressure...}.
+func TestInventsNamesFieldsNobodyAttached(t *testing.T) {
+	cases := []struct {
+		name   string
+		fields []Field
+		want   []Field
+	}{
+		{"pressure alone brings a temperature with it", []Field{Pressure}, []Field{Temperature}},
+		{"so does humidity", []Field{Humidity}, []Field{Temperature}},
+		{"with temperature attached, nothing is invented", []Field{Pressure, Temperature}, nil},
+		{"and it is named once, not per chip", []Field{Pressure, Humidity}, []Field{Temperature}},
+		{"a thermometer invents nothing", []Field{Temperature}, nil},
+		{"nor does anything else", []Field{Lux, Distance, PM25, Voltage, Rainfall1h}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Invents(tc.fields)
+			if len(got) != len(tc.want) {
+				t.Fatalf("Invents(%v) = %v, want %v", tc.fields, got, tc.want)
+			}
+			for i, f := range tc.want {
+				if got[i] != f {
+					t.Errorf("Invents(%v)[%d] = %s, want %s", tc.fields, i, got[i], f)
+				}
+			}
+		})
+	}
+	if c := Carriers(Temperature); len(c) != 3 {
+		t.Errorf("Carriers(temperature) = %v, want the three chips that report it", c)
+	}
+}
