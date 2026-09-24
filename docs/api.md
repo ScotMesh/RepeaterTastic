@@ -30,6 +30,7 @@ The web GUI uses this API, and so can scripts and integrations such as Home Assi
 - [Links](#links)
 - [API tokens, logs, backup and restore](#api-tokens-logs-backup-and-restore)
 - [meshtasticd nodes](#meshtasticd-nodes)
+- [Sensors](#sensors)
 - [Plugins](#plugins)
 
 ## Setup and auth
@@ -439,6 +440,7 @@ radio. Each event is `event: <type>` and `data: <JSON>`.
 | `traceroute` | a traceroute reply, or a timeout | `{"identity", "target", "route", "snr_towards", "route_back", "snr_back"}`, plus `"error": "no response within 60 s"` on a timeout |
 | `log` | a daemon log line (on every radio's stream) | `{"time", "level", "msg"}` |
 | `plugin` | a plugin changes (on every radio's stream) | Plugin, or `{"id", "deleted": true}` |
+| `sensor` | a sensor reads, fails or is edited (on every radio's stream) | Sensor, or `{"id", "deleted": true}` |
 
 A slow client misses events rather than holding up the radio. Reload the lists after reconnecting.
 The GUI closes the stream of a tab that has been in the background for 15 seconds, and reconnects
@@ -609,6 +611,51 @@ board itself as its relay; its identities still run on meshtasticd, one hop behi
   `meshtastic/meshtasticd` images are accepted. `POST /setup/meshtasticd` checks a program or image
   the same way and always answers 200 with `ok` and `error`, except for a program that isn't
   meshtasticd (400) or, before a password exists, an image that isn't `meshtastic/meshtasticd` (400).
+
+## Sensors
+
+Host readings published by identities as their own sensors ([Sensors](sensors.md)). Sensors belong to
+the host, not to a radio, so these endpoints ignore `?radio=`.
+
+A Sensor:
+
+```json
+{"id": "shed", "name": "Shed", "kind": "exec", "command": "/usr/local/bin/read-shed",
+ "interval": "5m0s", "scale": {"current": 0.001},
+ "last": {"at": "2026-09-24T12:00:03Z", "fields": {"temperature": 18.4, "humidity": 63.2}},
+ "age_ms": 12000, "fresh": true, "reads": 412, "errors": 0, "error": "",
+ "identities": ["!a1c40e07", "!00ff1234"]}
+```
+
+`kind` is `exec`, `file` or `push`. `fresh` is false once a reading is older than three times the
+sensor's interval (15 minutes for a push sensor), which is how the GUI greys a stale value. `error`
+is the last read's failure, kept while the previous good reading stays in `last`. `identities` are
+the node ids publishing it.
+
+| Method and path | Body → response |
+| --- | --- |
+| `GET /sensors` | → `{"sensors": [Sensor], "interval": "1h0m0s", "fields": [{"field", "unit", "chip"}]}` |
+| `POST /sensors` | `{"id", "name", "kind", "command", "path", "interval", "scale"}` → the Sensor (409 if the id is taken) |
+| `PUT /sensors/{id}` | the same → the Sensor |
+| `DELETE /sensors/{id}` | → `{"ok": true}`, and detaches it from every identity |
+| `POST /sensors/{id}/read` | → the Sensor after reading it now, or 400 with what the command printed |
+| `POST /sensors/{id}/push` | `{"temperature": 18.4}` → the Sensor (400 unless `kind` is `push`) |
+| `GET /sensors/{id}/history?since=1h` | → `[{"at", "fields"}]`, oldest first, up to 720 readings |
+| `PUT /sensors/interval` | `{"interval": "1h"}` → `{"interval": "1h0m0s"}`, how often nodes broadcast (min 30m) |
+| `GET /identities/{id}/sensors` | → `[{"sensor", "fields"}]` for one identity |
+| `PUT /identities/{id}/sensors` | `[{"sensor", "fields"}]` → the same, and restarts that identity's node |
+
+- `interval` fields are Go durations (`"5m"`, `"30s"`); a sensor is read no more often than every 5 s.
+- `fields` in `GET /sensors` is the catalogue the GUI offers: every field, its unit, and the chip the
+  node will think it has. A field no chip can carry is refused with 400.
+- `PUT /identities/{id}/sensors` bounces that identity's meshtasticd, because it only scans for
+  sensors at start-up. Nothing else on the host is interrupted. Changing a sensor's command, path,
+  interval or value applies live.
+- `POST /sensors/{id}/push` accepts a flat object of field names to numbers. Unknown fields are
+  ignored; a body with no usable field answers 400. Plugins push with the `sensors` permission
+  instead of a token.
+- Every change here is written to `repeatertastic.yaml`, the same file the [`sensors:`
+  section](sensors.md#setting-it-up-in-the-config-file) uses.
 
 ## Plugins
 
