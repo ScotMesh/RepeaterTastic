@@ -269,6 +269,43 @@ func (x *Hosting) Restart(nodeID string) error {
 	return nil
 }
 
+// SyncSensors brings every hosted node into line with the sensors it should now carry, and restarts
+// the ones whose sensors changed. It is what makes removing or editing a sensor reach the air: a
+// node keeps answering from the file it was given until it is restarted, so without this it would
+// publish a reading that has stopped being true. It returns the node ids it restarted.
+func (x *Hosting) SyncSensors() []string {
+	if x.opts.Sensors == nil {
+		return nil
+	}
+	x.mu.Lock()
+	entries := make([]*hostedEntry, 0, len(x.nodes))
+	for _, e := range x.nodes {
+		entries = append(entries, e)
+	}
+	x.mu.Unlock()
+
+	var restarted []string
+	for _, e := range entries {
+		id := e.hn.Current()
+		if id == nil {
+			continue
+		}
+		before := e.hn.Sensors()
+		if err := x.reseed(e); err != nil {
+			x.opts.Logf("sensors: %s: %v", e.hn.Instance().Name, err)
+			continue
+		}
+		if before.same(e.hn.Sensors()) {
+			continue
+		}
+		e.hn.Bounce()
+		restarted = append(restarted, id.NodeID())
+		x.opts.Logf("meshtasticd: %s %s restarts: its sensors changed", e.role, id.NodeID())
+	}
+	sort.Strings(restarted)
+	return restarted
+}
+
 // reseed re-plans a node's sensors and writes them into its instance directory, ready for the next
 // start. The node keeps running until something stops it (Bounce).
 func (x *Hosting) reseed(e *hostedEntry) error {

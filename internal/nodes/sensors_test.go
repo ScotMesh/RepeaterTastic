@@ -576,3 +576,62 @@ func TestIdentityStartsWhenItsSensorsCannot(t *testing.T) {
 		t.Errorf("logged %q, want a line saying the node came up without its sensors", lines)
 	}
 }
+
+// Removing a sensor has to reach the nodes carrying it. This happened on a live site: the sensor
+// was deleted, the config was tidied, and two nodes went on advertising an I²C chip and publishing
+// the last reading they had been given — frozen, and wrong.
+func TestSyncSensorsStopsANodePublishingARemovedSensor(t *testing.T) {
+	fakeShim(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h, err := mesh.NewHost(mesh.Config{Region: "EU_868", Preset: pb.Config_LoRaConfig_LONG_FAST, StateDir: t.TempDir()},
+		null.New(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := newFakeSensors()
+	src.read("pole-cpu", map[sensors.Field]float64{sensors.Temperature: 46.7})
+	src.attach["SHED"] = []sensors.Attachment{{Sensor: "pole-cpu", Fields: []sensors.Field{sensors.Temperature}}}
+
+	x := NewHosting(ctx, HostingOptions{Launcher: &fakeLauncher{}, Air: NewLoRaAir(h, nil), Radio: "main",
+		Dir: t.TempDir(), PortBase: 45800, Sensors: src})
+	shed, _ := mesh.NewIdentity(nil, "Shed Watch", "SHED")
+	if _, err := x.HostIdentity(ctx, h, shed.Record()); err != nil {
+		t.Fatal(err)
+	}
+	// The instance directory is the node's own, named after it under the hosting directory.
+	ents, err := os.ReadDir(x.opts.Dir)
+	if err != nil || len(ents) != 1 {
+		t.Fatalf("instance dirs = %v (%v)", ents, err)
+	}
+	dir := filepath.Join(x.opts.Dir, ents[0].Name())
+	if _, err := os.Stat(filepath.Join(dir, valuesFile)); err != nil {
+		t.Fatalf("the node never got its readings: %v", err)
+	}
+
+	// The sensor is deleted: nothing publishes it any more.
+	src.mu.Lock()
+	src.attach = map[string][]sensors.Attachment{}
+	src.latest = map[string]sensors.Reading{}
+	src.mu.Unlock()
+
+	restarted := x.SyncSensors()
+	if len(restarted) != 1 {
+		t.Fatalf("restarted %v, want the one node that was publishing it", restarted)
+	}
+	if p := x.Nodes()[0].Sensors; len(p) != 0 {
+		t.Errorf("node still carries %v", p)
+	}
+	if _, err := os.Stat(filepath.Join(dir, valuesFile)); !os.IsNotExist(err) {
+		t.Errorf("the readings file is still there (%v): a restarted node would publish it again", err)
+	}
+	if cfg, err := os.ReadFile(filepath.Join(dir, "config.yaml")); err != nil {
+		t.Fatal(err)
+	} else if strings.Contains(string(cfg), "I2CDevice") {
+		t.Error("the node is still told to open an I²C bus it has no sensors on")
+	}
+	// Nothing changed the second time, so nothing is restarted.
+	if again := x.SyncSensors(); len(again) != 0 {
+		t.Errorf("a second sync restarted %v for no reason", again)
+	}
+}

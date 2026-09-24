@@ -642,3 +642,43 @@ func TestListSaysWhetherNodesCanCarrySensors(t *testing.T) {
 		t.Errorf("can_publish=%v with reason %v: one of them is wrong", can, why)
 	}
 }
+
+// Saving the Configuration page must not drop the sensors section. The page doesn't know about
+// sensors and sends only its own sections, so anything it leaves out has to survive the save —
+// this happened on a live site: a relay-role change quietly deleted a working sensor.
+func TestConfigSaveKeepsSensors(t *testing.T) {
+	env := newSensorEnv(t)
+	code, _, _ := call(t, env.srv, "POST", "/api/v1/sensors", env.tok,
+		map[string]any{"id": "pole-cpu", "kind": "exec", "command": "echo temperature=44.5", "interval": "1m"})
+	if code != http.StatusCreated {
+		t.Fatalf("add sensor: %d", code)
+	}
+	if saved := env.reload(t); len(saved.Sources) != 1 {
+		t.Fatalf("the sensor didn't reach the file: %+v", saved)
+	}
+
+	// The top bar's relay-role control, which is what was used on the live site.
+	code, obj, _ := call(t, env.srv, "PUT", "/api/v1/relay", env.tok, map[string]any{"role": "client_mute"})
+	if code != http.StatusOK {
+		t.Fatalf("put relay: %d %v", code, obj)
+	}
+	if saved := env.reload(t); len(saved.Sources) != 1 {
+		t.Fatalf("changing the relay role deleted the sensors section: %+v", saved)
+	}
+
+	// What the Configuration page sends when someone changes the relay role: its own sections only.
+	code, obj, _ = call(t, env.srv, "PUT", "/api/v1/config", env.tok,
+		map[string]any{"relay": map[string]any{"role": "client_mute", "long_name": "The Pole Relay", "short_name": "POLE"}})
+	if code != http.StatusOK {
+		t.Fatalf("save config: %d %v", code, obj)
+	}
+
+	saved := env.reload(t)
+	if len(saved.Sources) != 1 || saved.Sources[0].ID != "pole-cpu" {
+		t.Fatalf("saving the Configuration page deleted the sensors section: %+v", saved)
+	}
+	code, list, _ := call(t, env.srv, "GET", "/api/v1/sensors", env.tok, nil)
+	if code != http.StatusOK || len(list["sensors"].([]any)) != 1 {
+		t.Fatalf("the running server lost the sensor too: %d %v", code, list)
+	}
+}

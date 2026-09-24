@@ -482,6 +482,9 @@ func (s *Server) applySensors(next config.Sensors) error {
 		_ = s.sensorsChanged(before) // put the running host back as it was
 		return err
 	}
+	// Tell the nodes: a sensor that was removed or changed has to stop being published, and a node
+	// only notices its sensors when it starts.
+	s.syncHostedSensors()
 	if err := s.saveIfPath(); err != nil {
 		// The change is live; say plainly that it won't survive a restart rather than pretend to
 		// have undone it under the running nodes.
@@ -572,10 +575,7 @@ func (s *Server) putIdentitySensors(w http.ResponseWriter, r *http.Request) {
 	for _, a := range want {
 		s.publishSensor(a.Sensor)
 	}
-	// The node has to restart to notice: nothing else on the host is interrupted.
-	if err := s.restartHostedIdentity(s.radioFor(r).id, nodeID); err != nil {
-		s.log.Warn("sensors saved but the node could not be restarted", "identity", nodeID, "err", err)
-	}
+	// applySensors has already restarted the nodes whose sensors changed, this one included.
 	writeJSON(w, http.StatusOK, s.attachmentsJSON(shortName, nodeID))
 }
 
@@ -711,15 +711,17 @@ func indexOfAttachment(want []sensors.Attachment, a config.SensorAttach) int {
 	return -1
 }
 
-// restartHostedIdentity bounces one identity's meshtasticd, which is the only way it notices a
-// sensor it now carries: it scans the I²C bus once, at start-up. A host running no meshtasticd has
-// nothing to restart, and that is not a failure.
-func (s *Server) restartHostedIdentity(radioID, nodeID string) error {
-	x := s.opt.Hosting[radioID]
-	if x == nil {
-		return nil
+// syncHostedSensors brings every radio's nodes into line with the sensors now configured, restarting
+// only those whose sensors actually changed.
+func (s *Server) syncHostedSensors() {
+	for id, x := range s.opt.Hosting {
+		if x == nil {
+			continue
+		}
+		if ids := x.SyncSensors(); len(ids) > 0 {
+			s.log.Info("sensors changed: nodes restarted to match", "radio", id, "identities", strings.Join(ids, ","))
+		}
 	}
-	return x.Restart(nodeID)
 }
 
 // ------------------------------------------------------------------------------------ events

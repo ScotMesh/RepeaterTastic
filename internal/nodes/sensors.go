@@ -6,7 +6,9 @@
 package nodes
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -85,6 +87,34 @@ func (s *SensorSetup) AirQuality() bool {
 		}
 	}
 	return false
+}
+
+// same reports whether two plans would give a node the same sensors. Only a difference here is
+// worth restarting a node for.
+func (s *SensorSetup) same(o *SensorSetup) bool {
+	if s == nil || o == nil {
+		return s == nil && o == nil
+	}
+	if len(s.Fields) != len(o.Fields) || len(s.Attach) != len(o.Attach) {
+		return false
+	}
+	for i, f := range s.Fields {
+		if o.Fields[i] != f {
+			return false
+		}
+	}
+	for i, a := range s.Attach {
+		b := o.Attach[i]
+		if a.Sensor != b.Sensor || len(a.Fields) != len(b.Fields) {
+			return false
+		}
+		for j, f := range a.Fields {
+			if b.Fields[j] != f {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // publishes reports whether the node carries readings from source id.
@@ -202,6 +232,12 @@ func launcherRoot(l Launcher, in Instance) string {
 func seedSensors(l Launcher, in *Instance, src SensorSource, p *SensorSetup) error {
 	if p == nil {
 		in.Sensors, in.Env = nil, nil
+		// Leave nothing for a restarted node to read: without this it would keep answering from the
+		// last file it was given, publishing a reading that stopped being true when the sensor was
+		// taken away.
+		if err := os.Remove(valuesPath(in.Dir)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("sensors for %s: %w", in.Name, err)
+		}
 		return nil
 	}
 	if err := os.MkdirAll(in.Dir, 0o700); err != nil {

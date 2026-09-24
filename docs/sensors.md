@@ -214,6 +214,11 @@ replays the firmware's exact call sequences.
 for the machine's architecture — amd64, arm64 and armv7 are built; an armv6 Pi isn't. Sensors still
 read and can be pushed to; they just can't be given to a node.
 
+**I removed a sensor — is the node still publishing it?** No. Removing a sensor, or detaching it from
+an identity, restarts the nodes that were carrying it so they stop advertising the chip, and their
+readings file is deleted so a restarted node can't answer from it. Nodes that weren't affected keep
+running.
+
 **A node came up without its sensors.** If the shim can't be unpacked into a node's directory (no
 library for this architecture, a full or read-only disk), the identity starts anyway, without them,
 and says so in its log. Being on the mesh matters more than carrying a thermometer.
