@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Sensors: the readings this host takes, and which identities publish each one as their own.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Link2, Pencil, Plus, RefreshCw, Thermometer, Timer, Trash } from '@lucide/vue'
+import { Link2, Pencil, Plus, RefreshCw, Thermometer, Timer, Trash, TriangleAlert } from '@lucide/vue'
 import { api, enc } from '@/api/client'
 import type { Sensor, SensorsResponse } from '@/api/types'
 import SensorReading from '@/components/sensors/SensorReading.vue'
@@ -169,8 +169,10 @@ onBeforeUnmount(() => {
           <div v-if="s.identities.length" class="flex flex-wrap gap-1">
             <span v-for="id in s.identities" :key="id" class="chip bg-brand/12 text-brand" :title="id">{{ nodeLabel(id).long }}</span>
           </div>
-          <p v-else class="text-xs text-ink-3">
-            Nobody yet<template v-if="identityCount"> — attach it to an identity to put it on air</template>.
+          <p v-else class="flex items-center gap-1.5 rounded-lg bg-warn/12 px-2 py-1.5 text-xs font-medium text-warn">
+            <TriangleAlert class="size-3.5 shrink-0" />
+            <span v-if="identityCount">Nobody yet — attach it to an identity to put it on air.</span>
+            <span v-else>Nobody yet — this radio has no identities to publish it.</span>
           </p>
         </div>
 

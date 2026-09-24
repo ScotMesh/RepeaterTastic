@@ -21,6 +21,10 @@ const interval = ref('1m')
 const scaled = ref<{ field: string; factor: number }[]>([])
 const busy = ref(false)
 const error = ref('')
+// What the Test button found: the reading, or the reason there wasn't one. Cleared whenever the
+// sensor is edited, so what is on screen always belongs to what is in the boxes.
+const tried = ref<{ ok: boolean; text: string } | null>(null)
+const trying = ref(false)
 
 // Only fields a node can actually carry are worth scaling: the rest can't be published.
 const carried = computed(() => (props.fields ?? []).filter((f) => f.chip))
@@ -43,8 +47,30 @@ watch(
     interval.value = (s?.interval ?? '1m').replace(/(\d+h)0m0s$/, '$1').replace(/(\d+m)0s$/, '$1')
     scaled.value = Object.entries(s?.scale ?? {}).map(([field, factor]) => ({ field, factor }))
     error.value = ''
+    tried.value = null
   },
 )
+
+watch([kind, command, path, interval], () => (tried.value = null))
+
+/** Run it now, without saving: the same code a saved sensor uses. */
+async function test() {
+  trying.value = true
+  tried.value = null
+  try {
+    const r = await api.post<{ reading: { at: string; fields: Record<string, number> } | null }>('/sensors/try', requestBody())
+    const f = r.reading?.fields ?? {}
+    const names = Object.keys(f).sort()
+    tried.value = {
+      ok: true,
+      text: names.length ? names.map((k) => `${k} = ${f[k]}`).join(' · ') : 'ran, but printed no readings we understand',
+    }
+  } catch (e) {
+    tried.value = { ok: false, text: e instanceof Error ? e.message : String(e) }
+  } finally {
+    trying.value = false
+  }
+}
 
 // An id names a file in each node's directory, so it has to be safe to put in a path.
 const idOk = computed(() => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id.value) && !id.value.includes('..'))
@@ -60,11 +86,10 @@ function addScale() {
   if (free) scaled.value.push({ field: free.field, factor: 1 })
 }
 
-async function save() {
-  busy.value = true
-  error.value = ''
-  const body: Record<string, unknown> = {
-    id: id.value.trim(),
+/** What the API takes, from the boxes as they stand. Save and Test send the same thing. */
+function requestBody(): Record<string, unknown> {
+  return {
+    id: id.value.trim() || 'draft',
     name: name.value.trim(),
     kind: kind.value,
     command: kind.value === 'exec' ? command.value.trim() : '',
@@ -72,6 +97,12 @@ async function save() {
     interval: kind.value === 'push' ? '' : interval.value.trim(),
     scale: Object.fromEntries(scaled.value.filter((s) => s.factor).map((s) => [s.field, s.factor])),
   }
+}
+
+async function save() {
+  busy.value = true
+  error.value = ''
+  const body = { ...requestBody(), id: id.value.trim() }
   try {
     const out = props.sensor
       ? await api.put<Sensor>(`/sensors/${enc(props.sensor.id)}`, body)
@@ -176,9 +207,24 @@ async function save() {
       </div>
     </div>
 
+    <p
+      v-if="tried"
+      :class="['mt-4 rounded-xl px-3 py-2.5 text-[13px]', tried.ok ? 'bg-ok/10 text-ok' : 'bg-bad/10 text-bad']"
+    >
+      <template v-if="tried.ok">It ran: <span class="mono">{{ tried.text }}</span></template>
+      <template v-else>{{ tried.text }}</template>
+    </p>
     <p v-if="error" class="mt-4 text-[13px] text-bad">{{ error }}</p>
     <template #footer>
       <button type="button" class="btn" @click="emit('close')">Cancel</button>
+      <button
+        v-if="kind !== 'push'"
+        type="button"
+        class="btn"
+        :disabled="trying || !valid"
+        title="Run it now, without saving"
+        @click="test"
+      ><Spinner v-if="trying" />Test</button>
       <button type="button" class="btn btn-primary" :disabled="busy || !valid" @click="save">
         <Spinner v-if="busy" />{{ editing ? 'Save sensor' : 'Add sensor' }}
       </button>

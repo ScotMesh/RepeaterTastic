@@ -639,6 +639,7 @@ the node ids publishing it.
 | `POST /sensors` | `{"id", "name", "kind", "command", "path", "interval", "scale"}` → the Sensor (409 if the id is taken) |
 | `PUT /sensors/{id}` | the same → the Sensor |
 | `DELETE /sensors/{id}` | → `{"ok": true}`, and detaches it from every identity |
+| `POST /sensors/try` | the same body as `POST /sensors` → `{"reading": {"at", "fields"}, "fields": n}`, running it without saving |
 | `POST /sensors/{id}/read` | → the Sensor after reading it now, or 400 with what the command printed |
 | `POST /sensors/{id}/push` | `{"temperature": 18.4}` → the Sensor (400 unless `kind` is `push`) |
 | `GET /sensors/{id}/history?since=1h` | → `[{"at", "fields"}]`, oldest first, up to 720 readings |
@@ -646,6 +647,10 @@ the node ids publishing it.
 | `GET /identities/{id}/sensors` | → `[{"sensor", "fields"}]` for one identity |
 | `PUT /identities/{id}/sensors` | `[{"sensor", "fields"}]` → the same, and restarts that identity's node |
 
+- `POST /sensors/try` is what the Add dialog's **Test** button uses: it runs the source exactly as a
+  saved one would, saves nothing, registers nothing, and answers 400 with what the command said when
+  it fails. A `push` source has nothing to run and is refused. A sensor may not be called `try` or
+  `interval`, since both are endpoints under `/sensors`.
 - `interval` fields are Go durations (`"5m"`, `"30s"`); a sensor is read no more often than every 5 s.
 - `can_publish` is false when this build carries no I²C shim for the machine's architecture, with
   `cannot_publish_why` saying so: sensors still read and can be pushed to, but no node can be given

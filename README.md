@@ -103,11 +103,12 @@ schedule. No root, no I²C hardware, nothing patched. Full guide: [Sensors](docs
 2. Whatever produces the reading prints **one `field=value` per line**. The dialog lists the field
    names a node can publish — `temperature`, `humidity`, `pm10`, `pm25`, `pm100`, `voltage`,
    `current` — and anything else in the output is ignored.
-3. **Read now** runs it there and then and shows exactly what came back, so a typo is obvious before
-   the sensor goes anywhere.
-4. **Attach**, tick the identities that should publish it, and choose each one's fields. Attaching
-   restarts those identities' nodes — a `meshtasticd` looks for sensors only when it starts — and the
-   dialog says which ones will bounce before you confirm.
+3. **Test** in the dialog runs it before anything is saved and shows exactly what came back, so a
+   typo is obvious before the sensor exists at all. **Read now** does the same for a saved one.
+4. **Attach**, tick the identities that should publish it, and choose each one's fields. Until you
+   do, the card says so in amber — a sensor reads happily on its own, but nothing reaches the air
+   until an identity publishes it. Attaching restarts those identities' nodes (a `meshtasticd` looks
+   for sensors only when it starts) and the dialog says which ones will bounce before you confirm.
 5. **Broadcast every** (top of the page) sets how often each node puts its readings on air: 1 hour by
    default, 30 minutes minimum. That is one packet **per identity** per interval, counted in the
    site's airtime budget.

@@ -27,6 +27,7 @@ func (s *Server) sensorRoutes(priv func(string, http.HandlerFunc)) {
 	priv("PUT /api/v1/sensors/interval", s.putSensorInterval)
 	priv("PUT /api/v1/sensors/{id}", s.updateSensor)
 	priv("DELETE /api/v1/sensors/{id}", s.deleteSensor)
+	priv("POST /api/v1/sensors/try", s.trySensor)
 	priv("POST /api/v1/sensors/{id}/read", s.readSensorNow)
 	priv("POST /api/v1/sensors/{id}/push", s.pushSensor)
 	priv("GET /api/v1/sensors/{id}/history", s.sensorHistory)
@@ -238,8 +239,10 @@ func readSource(w http.ResponseWriter, r *http.Request, fallbackID string) (sens
 	}
 	// PUT /sensors/interval is the broadcast interval, so a sensor with that id could never be
 	// edited again. Say so now rather than let someone make one.
-	if src.ID == "interval" {
-		writeError(w, http.StatusBadRequest, `"interval" is used by the broadcast interval setting; give the sensor another id`)
+	// These names are endpoints of their own under /sensors, so a sensor called either would be
+	// unreachable for ever.
+	if src.ID == "interval" || src.ID == "try" {
+		writeError(w, http.StatusBadRequest, `"`+src.ID+`" is used by an endpoint of the same name; give the sensor another id`)
 		return sensors.Source{}, false
 	}
 	return src, true
@@ -359,6 +362,26 @@ func (s *Server) deleteSensor(w http.ResponseWriter, r *http.Request) {
 	}
 	s.publishSensor(id)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// trySensor is POST /sensors/try: run a sensor that hasn't been saved and say what came back. It is
+// the same code path a saved sensor uses, so the Add dialog can prove a command works before anyone
+// attaches it to a node and restarts it for nothing.
+func (s *Server) trySensor(w http.ResponseWriter, r *http.Request) {
+	reg := s.sensorRegistry(w)
+	if reg == nil {
+		return
+	}
+	src, ok := readSource(w, r, "draft")
+	if !ok {
+		return
+	}
+	rd, err := reg.Try(r.Context(), src)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"reading": readingJSON(rd), "fields": len(rd.Fields)})
 }
 
 func (s *Server) readSensorNow(w http.ResponseWriter, r *http.Request) {

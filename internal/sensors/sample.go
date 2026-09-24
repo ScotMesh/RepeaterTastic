@@ -133,6 +133,19 @@ func (r *Registry) ReadNow(ctx context.Context, id string) (Reading, error) {
 	return rd, nil
 }
 
+// Try reads a source that isn't configured yet, for the GUI's "Test" button: the same code path a
+// saved sensor uses, so what you see before saving is what you get afterwards. Nothing is recorded
+// and nothing is registered.
+func (r *Registry) Try(ctx context.Context, s Source) (Reading, error) {
+	if err := s.Validate(); err != nil {
+		return Reading{}, err
+	}
+	if s.Kind == Push {
+		return Reading{}, fmt.Errorf("sensor %q is pushed to, so there is nothing to test here; save it and push a reading", s.ID)
+	}
+	return r.sample(ctx, s)
+}
+
 // sample takes one reading, whichever way this source produces them.
 func (r *Registry) sample(ctx context.Context, s Source) (Reading, error) {
 	switch s.Kind {

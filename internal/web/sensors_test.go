@@ -682,3 +682,40 @@ func TestConfigSaveKeepsSensors(t *testing.T) {
 		t.Fatalf("the running server lost the sensor too: %d %v", code, list)
 	}
 }
+
+// The Add dialog's Test button: run a sensor that hasn't been saved, and prove it saves nothing.
+func TestTrySensorBeforeSaving(t *testing.T) {
+	env := newSensorEnv(t)
+
+	code, obj, _ := call(t, env.srv, "POST", "/api/v1/sensors/try", env.tok,
+		map[string]any{"id": "draft", "kind": "exec", "command": "printf 'temperature=8.25\\nhumidity=71\\n'", "interval": "1m"})
+	if code != http.StatusOK {
+		t.Fatalf("try: %d %v", code, obj)
+	}
+	rd, _ := obj["reading"].(map[string]any)
+	fields, _ := rd["fields"].(map[string]any)
+	if fields["temperature"] != 8.25 || fields["humidity"] != float64(71) {
+		t.Fatalf("reading = %v", rd)
+	}
+	if saved := env.reload(t); len(saved.Sources) != 0 {
+		t.Errorf("testing a sensor saved it: %+v", saved)
+	}
+	code, list, _ := call(t, env.srv, "GET", "/api/v1/sensors", env.tok, nil)
+	if code != http.StatusOK || len(list["sensors"].([]any)) != 0 {
+		t.Errorf("testing a sensor registered it: %v", list)
+	}
+
+	// A command that fails says why, in the words the command used.
+	code, obj, _ = call(t, env.srv, "POST", "/api/v1/sensors/try", env.tok,
+		map[string]any{"id": "draft", "kind": "exec", "command": "echo nope >&2; exit 3", "interval": "1m"})
+	if code != http.StatusBadRequest || !strings.Contains(obj["error"].(string), "nope") {
+		t.Fatalf("failing command: %d %v", code, obj)
+	}
+	// And a sensor can't be called after an endpoint that lives under /sensors.
+	for _, id := range []string{"try", "interval"} {
+		code, _, _ = call(t, env.srv, "POST", "/api/v1/sensors", env.tok, map[string]any{"id": id, "kind": "push"})
+		if code != http.StatusBadRequest {
+			t.Errorf("a sensor called %q was accepted (%d)", id, code)
+		}
+	}
+}

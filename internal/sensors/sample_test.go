@@ -378,3 +378,25 @@ func TestExecTimeoutKillsTheWholePipeline(t *testing.T) {
 	}
 	t.Fatal("a child of the timed-out command was still running")
 }
+
+// Try runs a source that hasn't been saved, and leaves nothing behind.
+func TestTryRunsAnUnsavedSource(t *testing.T) {
+	r, _ := testReg(t)
+	rd, err := r.Try(context.Background(), Source{ID: "draft", Kind: Exec, Command: "echo temperature=12.5", Interval: time.Minute})
+	if err != nil || rd.Fields[Temperature] != 12.5 {
+		t.Fatalf("Try = %+v, %v", rd, err)
+	}
+	if len(r.Sources()) != 0 || len(r.Status()) != 0 {
+		t.Error("testing a sensor registered it")
+	}
+	if _, err := r.Try(context.Background(), Source{ID: "draft", Kind: Exec, Command: "exit 4", Interval: time.Minute}); err == nil {
+		t.Error("a failing command tested clean")
+	}
+	if _, err := r.Try(context.Background(), Source{ID: "draft", Kind: Push}); err == nil ||
+		!strings.Contains(err.Error(), "nothing to test") {
+		t.Errorf("push source: %v", err)
+	}
+	if _, err := r.Try(context.Background(), Source{Kind: Exec, Command: "true"}); err == nil {
+		t.Error("an invalid source was tested rather than refused")
+	}
+}

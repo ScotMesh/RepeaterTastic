@@ -127,7 +127,11 @@ Three notes from the Meshtastic side:
 1. **Add sensor** — name it, pick `exec`, `file` or `push`, give the command or path, set how often to
    read it. **Read now** tries it immediately and shows exactly what came back, so a typo in a
    command is obvious before you attach it to anything.
-2. The list shows each sensor's latest reading, its age, and the last error if it's failing.
+   **Test** runs it there and then, without saving, and shows what came back — so a typo in a command
+   is caught before anything is created.
+2. The list shows each sensor's latest reading, its age, and the last error if it's failing. A sensor
+   nobody publishes says so in amber: a sensor on its own reads, but nothing goes on air until it is
+   attached to an identity.
 3. **Attach** — tick the identities that should publish it and the fields each should send. Attaching
    to a running identity restarts that identity's node; the dialog tells you which ones will bounce.
 
