@@ -88,6 +88,86 @@ docker build -t repeatertastic .         # container image, meshtasticd included
 Go 1.25+ is needed. `MAP_API_KEY=… make build` (or `--secret id=map_api_key,env=CARTO_API_KEY` for
 Docker) bakes in a default map tile key; see [Configuration](docs/configuration.md#web-and-map-tiles).
 
+## Sensors
+
+A sensor on the machine running RepeaterTastic can be published by any of your identities — as many
+as you like — each broadcasting it as **its own** sensor. RepeaterTastic never sends the telemetry
+packet: it writes the reading into each node's folder, and a small shim makes that node's stock
+`meshtasticd` believe it owns an I²C chip, so the node reads it and broadcasts it on its own
+schedule. No root, no I²C hardware, nothing patched. Full guide: [Sensors](docs/sensors.md).
+
+### Set one up in the GUI
+
+1. **Sensors → Add sensor.** Give it a name and an id, then say where the reading comes from:
+   **Run a command**, **Read a file**, or **Pushed to us** (a script or plugin sends it in).
+2. Whatever produces the reading prints **one `field=value` per line**. The dialog lists the field
+   names a node can publish — `temperature`, `humidity`, `pm10`, `pm25`, `pm100`, `voltage`,
+   `current` — and anything else in the output is ignored.
+3. **Read now** runs it there and then and shows exactly what came back, so a typo is obvious before
+   the sensor goes anywhere.
+4. **Attach**, tick the identities that should publish it, and choose each one's fields. Attaching
+   restarts those identities' nodes — a `meshtasticd` looks for sensors only when it starts — and the
+   dialog says which ones will bounce before you confirm.
+5. **Broadcast every** (top of the page) sets how often each node puts its readings on air: 1 hour by
+   default, 30 minutes minimum. That is one packet **per identity** per interval, counted in the
+   site's airtime budget.
+
+Everything the GUI does is written to `repeatertastic.yaml`, and that file can be written by hand
+instead — the two are the same thing.
+
+### Examples
+
+A Raspberry Pi's own CPU temperature, no hardware needed:
+
+```yaml
+sensors:
+    sources:
+        - id: pi-cpu
+          name: Pi CPU
+          kind: exec
+          command: awk '{printf "temperature=%.1f\n", $1/1000}' /sys/class/thermal/thermal_zone0/temp
+          interval: 1m
+    attach:
+        - {sensor: pi-cpu, identities: [all], fields: [temperature]}
+```
+
+A BME280 on the Pi's own I²C bus, read by whatever tool you like, published by two personas (the
+snippets below continue the same `sources:` and `attach:` lists):
+
+```yaml
+        - id: outside
+          name: Outside
+          kind: exec
+          command: /usr/local/bin/read-bme280      # prints temperature= and humidity=
+          interval: 5m
+    attach:
+        - {sensor: outside, identities: [BASE, "!a1c40e07"], fields: [temperature, humidity]}
+```
+
+A battery shunt whose script reports milliamps, corrected on the way in:
+
+```yaml
+        - id: battery
+          kind: file
+          path: /run/battery.values                # voltage=12.6 / current=1450
+          interval: 30s
+          scale: {current: 0.001}                  # mA → A
+```
+
+An air quality sensor fed from elsewhere — Home Assistant, a cron job, anything that can POST:
+
+```yaml
+        - id: air
+          name: Air quality
+          kind: push                               # POST /api/v1/sensors/air/push {"pm25": 7.4}
+```
+
+Which readings reach the air is fixed by the chips the shim imitates: temperature, humidity,
+`pm10`/`pm25`/`pm100`, voltage and current. Pressure, lux, distance, radiation and rainfall are
+refused with a message saying so rather than silently dropped —
+[the table in the guide](docs/sensors.md#which-fields-can-be-published) has the details, and adding
+one is a chip model in `shim/i2cshim.c`.
+
 ## Documentation
 
 | Guide | What's in it |

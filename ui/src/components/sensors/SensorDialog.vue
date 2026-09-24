@@ -25,6 +25,10 @@ const error = ref('')
 // Only fields a node can actually carry are worth scaling: the rest can't be published.
 const carried = computed(() => (props.fields ?? []).filter((f) => f.chip))
 
+// Meshtastic has more environment readings than we can imitate a chip for; naming one of these in a
+// reading is not an error, it simply never reaches the air, so the dialog says which is which.
+const notCarried = computed(() => (props.fields ?? []).filter((f) => !f.chip).map((f) => f.field))
+
 watch(
   () => props.open,
   (o) => {
@@ -118,6 +122,10 @@ async function save() {
       <label class="label" for="sn-cmd">Command</label>
       <input id="sn-cmd" v-model="command" class="input mono" placeholder="/usr/local/bin/read-shed" spellcheck="false" />
       <p class="hint">Run with <span class="mono">/bin/sh -c</span>. Print one <span class="mono">temperature=21.5</span> per line and exit; it's killed after 10 seconds.</p>
+      <p class="hint">
+        A Pi's own CPU temperature, for example:
+        <span class="mono">awk '{printf "temperature=%.1f\n", $1/1000}' /sys/class/thermal/thermal_zone0/temp</span>
+      </p>
     </div>
     <div v-else-if="kind === 'file'" class="mt-3">
       <label class="label" for="sn-path">File</label>
@@ -128,6 +136,24 @@ async function save() {
       A plugin or a script sends readings to <span class="mono">POST /api/v1/sensors/{{ id || 'id' }}/push</span>. Nothing is read
       on a schedule, and a pushed reading counts as current for 15 minutes.
     </p>
+
+    <div class="mt-4 rounded-xl bg-raised px-3 py-2.5">
+      <span class="label">Readings a node can publish</span>
+      <p class="hint !mt-0">
+        Use these names exactly. Anything else in the output is ignored, so extra lines do no harm.
+      </p>
+      <div class="mt-2 flex flex-wrap gap-1.5">
+        <span
+          v-for="f in carried"
+          :key="f.field"
+          class="chip bg-brand/12 text-brand mono"
+          :title="`carried by the ${f.chip} the node thinks it has`"
+        >{{ f.field }}<span v-if="f.unit" class="ml-1 opacity-70">{{ f.unit }}</span></span>
+      </div>
+      <p v-if="notCarried.length" class="hint">
+        Not yet: <span class="mono">{{ notCarried.join(', ') }}</span> — no chip we imitate reports them, so they're dropped.
+      </p>
+    </div>
 
     <div v-if="kind !== 'push'" class="mt-4 sm:w-1/2">
       <label class="label" for="sn-iv">Read every</label>
