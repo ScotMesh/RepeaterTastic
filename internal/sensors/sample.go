@@ -150,7 +150,7 @@ func (r *Registry) readExec(ctx context.Context, s Source) (Reading, error) {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return Reading{}, fmt.Errorf("sensor %q: command still running after %s, so it was killed; make it print a reading and exit", s.ID, r.execWait(s))
 		}
-		return Reading{}, fmt.Errorf("sensor %q: command failed: %v%s", s.ID, err, detail(stderr.Bytes()))
+		return Reading{}, fmt.Errorf("sensor %q: command failed: %w%s", s.ID, err, detail(stderr.Bytes()))
 	}
 	vals := scaleFields(s.Scale, ParseValues(out.Bytes()))
 	if len(vals) == 0 {
@@ -167,7 +167,7 @@ func (r *Registry) readFile(s Source) (Reading, error) {
 		if errors.Is(err, fs.ErrNotExist) {
 			return Reading{}, fmt.Errorf("sensor %q: nothing at %s yet; check the path, and that whatever writes it is running", s.ID, s.Path)
 		}
-		return Reading{}, fmt.Errorf("sensor %q: cannot read %s: %v", s.ID, s.Path, err)
+		return Reading{}, fmt.Errorf("sensor %q: cannot read %s: %w", s.ID, s.Path, err)
 	}
 	vals := scaleFields(s.Scale, ParseValues(b))
 	if len(vals) == 0 {

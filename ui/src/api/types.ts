@@ -592,6 +592,8 @@ export interface HostedInstance {
   stops: HostedStop[]
   firmware?: string
   node_id?: string
+  /** Ids of the host sensors this node publishes as its own. */
+  sensors?: string[]
 }
 
 export interface HostedStop {
@@ -630,4 +632,62 @@ export interface HostedSettings {
   min_version: string
   instances: HostedInstance[]
   restart_required: boolean
+}
+
+// ------------------------------------------------------------------------------------ sensors
+
+export type SensorKind = 'exec' | 'file' | 'push'
+
+/** One reading a source produced. */
+export interface SensorReading {
+  at: string
+  fields: Record<string, number>
+}
+
+/**
+ * A field a node can publish: its unit, and the chip the node will think it has. An empty chip
+ * means no imitated chip can carry it, so it can't be published.
+ */
+export interface SensorFieldInfo {
+  field: string
+  unit: string
+  chip: string
+}
+
+export interface Sensor {
+  id: string
+  name: string
+  kind: SensorKind
+  command?: string
+  path?: string
+  /** A Go duration ("5m0s"); absent for a push sensor, which has nothing to schedule. */
+  interval?: string
+  scale?: Record<string, number>
+  /** The last reading, null until it has been read once. */
+  last: SensorReading | null
+  age_ms: number
+  /** False once the reading is older than three times the interval: the GUI greys it. */
+  fresh: boolean
+  reads: number
+  errors: number
+  /** The last read's failure, kept while the previous good reading stays in `last`. */
+  error: string
+  /** The node ids publishing it. */
+  identities: string[]
+  /** Set on the SSE event when the sensor has been deleted. */
+  deleted?: boolean
+}
+
+export interface SensorsResponse {
+  enabled: boolean
+  sensors: Sensor[]
+  /** How often a node broadcasts its telemetry, a Go duration. */
+  interval?: string
+  fields?: SensorFieldInfo[]
+}
+
+/** What one identity publishes (GET/PUT /identities/{id}/sensors). Empty fields means everything. */
+export interface SensorAttachment {
+  sensor: string
+  fields: string[]
 }

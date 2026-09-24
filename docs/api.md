@@ -595,7 +595,8 @@ board itself as its relay; its identities still run on meshtasticd, one hop behi
 
 - `instances` are the meshtasticd processes running now: `{"radio", "role", "name", "launcher",
   "port", "running", "connected", "since", "restarts", "reboots", "last_error", "stops",
-  "firmware", "node_id"}`. `role` is `persona` or `identity`; `since` is when the current process
+  "firmware", "node_id", "sensors"}`. `role` is `persona` or `identity`; `sensors` are the ids of the
+  host sensors that node publishes as its own ([Sensors](sensors.md)); `since` is when the current process
   started. `restarts` counts unexpected stops and `reboots` the stops that applied settings
   RepeaterTastic had just given it (meshtasticd reboots for some). `stops` are the last 20, each
   `{"time", "reason", "reboot"}`. `GET /hosted/{name}/log` has the instance's output.

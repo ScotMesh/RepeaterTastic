@@ -29,6 +29,7 @@ export const router = createRouter({
         { path: 'packets', name: 'packets', component: () => import('@/views/Packets.vue'), meta: { title: 'Packets' } },
         { path: 'statistics', name: 'statistics', component: () => import('@/views/Statistics.vue'), meta: { title: 'Statistics' } },
         { path: 'links', name: 'links', component: () => import('@/views/Links.vue'), meta: { title: 'Links' } },
+        { path: 'sensors', name: 'sensors', component: () => import('@/views/Sensors.vue'), meta: { title: 'Sensors' } },
         { path: 'config/:tab?', name: 'config', component: () => import('@/views/Configuration.vue'), meta: { title: 'Configuration' } },
         { path: 'logs', name: 'logs', component: () => import('@/views/Logs.vue'), meta: { title: 'Logs' } },
         {

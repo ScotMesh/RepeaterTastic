@@ -2,7 +2,7 @@
 // Structure after openHop's Sidebar (MIT, © Lloyd Newton), rewritten for Meshtastic identities.
 import { computed } from 'vue'
 import {
-  Activity, Cable, ChartColumn, Layers, LayoutDashboard, MapPinned, MessagesSquare, Puzzle, ScrollText, Settings2, UsersRound, X,
+  Activity, Cable, ChartColumn, Layers, LayoutDashboard, MapPinned, MessagesSquare, Puzzle, ScrollText, Settings2, Thermometer, UsersRound, X,
 } from '@lucide/vue'
 import Logo from '@/components/ui/Logo.vue'
 import Sparkline from '@/components/charts/Sparkline.vue'
@@ -42,6 +42,7 @@ const groups = computed(() => [
     label: 'System',
     items: [
       { to: '/config', name: 'config', label: 'Configuration', icon: Settings2 },
+      { to: '/sensors', name: 'sensors', label: 'Sensors', icon: Thermometer },
       { to: '/plugins', name: 'plugins', label: 'Plugins', icon: Puzzle },
       { to: '/logs', name: 'logs', label: 'Logs', icon: ScrollText },
     ],

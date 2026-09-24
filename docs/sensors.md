@@ -203,6 +203,10 @@ replays the firmware's exact call sequences.
 virtual identity) and that it restarted after the sensor was attached. The node log line to look for
 is the sensor being detected at start-up.
 
+**It says 0.** A node has to be able to answer its I²C scan before the first sample arrives, so a
+field with no reading yet reads as 0. An `exec` or `file` sensor fills in within its interval; a
+`push` sensor reads 0 until something pushes to it.
+
 **The value never changes.** RepeaterTastic writes the file only when the reading changes; check the
 sensor's age in the GUI. An `exec` source that's failing keeps its last good value and shows the
 error.

@@ -409,7 +409,7 @@ func (s *Server) patchIdentity(w http.ResponseWriter, r *http.Request) {
 	// Check everything first, so a request is applied completely or not at all.
 	pos, bind, err := s.checkIdentityPatch(id, &req)
 	if err != nil {
-		writeStatusError(w, http.StatusBadRequest, err)
+		writeStatusError(w, err)
 		return
 	}
 	if err := s.applyIdentityPatch(r, id, &req, pos, bind); err != nil {

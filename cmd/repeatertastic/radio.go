@@ -41,7 +41,7 @@ type radioRuntime struct {
 
 // startRadio opens a radio's modem, builds its host and identities and starts its client
 // API and UDP link. The host itself is run by the caller.
-func startRadio(ctx context.Context, rc config.RadioConfig, index int, log *slog.Logger, uplinked *mqtt.Uplinked) (*radioRuntime, error) {
+func startRadio(ctx context.Context, rc config.RadioConfig, index int, log *slog.Logger, uplinked *mqtt.Uplinked, sh *sensorHub) (*radioRuntime, error) {
 	if err := os.MkdirAll(rc.StateDir, 0o700); err != nil {
 		return nil, fmt.Errorf("state dir: %w", err)
 	}
@@ -61,7 +61,7 @@ func startRadio(ctx context.Context, rc config.RadioConfig, index int, log *slog
 			return nil, err
 		}
 	}
-	hosting := startHosting(ctx, rc, index, host, relay, log)
+	hosting := startHosting(ctx, rc, index, host, relay, log, sh)
 	if err := loadIdentities(ctx, rc.Config, host, log); err != nil {
 		_ = r.Close()
 		return nil, err
@@ -297,7 +297,7 @@ func newUniqueIdentity(host *mesh.Host, long, short string) (*mesh.Identity, err
 // host's hoster starts the relay persona and every other identity on it as their records are
 // loaded. A board radio's air has the board as its relay, and its identities run a hop behind it.
 // When meshtasticd can't run, the nodes keep trying (and the status bar says why).
-func startHosting(ctx context.Context, rc config.RadioConfig, index int, host *mesh.Host, relay *nodes.Node, log *slog.Logger) *nodes.Hosting {
+func startHosting(ctx context.Context, rc config.RadioConfig, index int, host *mesh.Host, relay *nodes.Node, log *slog.Logger, sh *sensorHub) *nodes.Hosting {
 	hc := rc.Hosted
 	l := nodes.LauncherFor(hc.Meshtasticd, hc.DockerImage)
 	logf := logfFor(log)
@@ -307,6 +307,9 @@ func startHosting(ctx context.Context, rc config.RadioConfig, index int, host *m
 		Dir: filepath.Join(rc.StateDir, "hosted"), PortBase: hc.RadioPortBase(index),
 		RelayOwner: func() (string, string) { return relayLong, relayShort }, Logf: logf,
 		NodeLogf: func(nodeID string) func(string, ...any) { return logfFor(log.With("identity", nodeID)) }}
+	if sh != nil {
+		opts.Sensors = sh // identities publish the host's sensors as their own
+	}
 	if relay != nil {
 		opts.HopsBehind = 1
 	}

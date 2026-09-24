@@ -30,6 +30,11 @@ type Instance struct {
 	Dir  string // config.yaml and the node's filesystem (vfs) live here
 	Port int    // client API port
 	HWID string // 12 hex digits: the node's MAC address
+	// Env is extra environment for the process ("K=V"), the I²C shim's for a node that carries
+	// sensors. Its paths are the ones that process sees: inside the container under Docker.
+	Env []string
+	// Sensors, when set, are the imitated I²C sensors the node finds when it starts (sensors.go).
+	Sensors *SensorSetup
 }
 
 // ConfigPath is the instance's meshtasticd config file.
@@ -73,6 +78,9 @@ func (l ExecLauncher) Describe() string { return l.bin() }
 func (l ExecLauncher) Run(ctx context.Context, in Instance, out io.Writer) error {
 	cmd := exec.CommandContext(ctx, l.bin(), in.Args(in.ConfigPath(), filepath.Join(in.Dir, "vfs"))...)
 	cmd.Dir = in.Dir
+	if len(in.Env) > 0 {
+		cmd.Env = append(os.Environ(), in.Env...)
+	}
 	cmd.Stdout, cmd.Stderr = out, out
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = 5 * time.Second
@@ -105,7 +113,13 @@ func (l DockerLauncher) Run(ctx context.Context, in Instance, out io.Writer) err
 	args := []string{"run", "--rm", "--name", name, "--label", "repeatertastic.hosted=1",
 		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
 		"-p", fmt.Sprintf("127.0.0.1:%d:%d", in.Port, in.Port),
-		"-v", dir + ":/data", l.Image, "/usr/bin/meshtasticd"}
+		"-v", dir + ":/data"}
+	for _, e := range in.Env {
+		// The instance directory is already mounted at /data, so the shim, its readings file and
+		// the bus it fakes are all in there; Env's paths say /data.
+		args = append(args, "-e", e)
+	}
+	args = append(args, l.Image, "/usr/bin/meshtasticd")
 	args = append(args, in.Args("/data/config.yaml", "/data/vfs")...)
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdout, cmd.Stderr = out, out
@@ -164,6 +178,16 @@ General:
   MaxMessageQueue: 100
 `
 
+// instanceConfigFor is the instance's config file: the sim radio, and an I²C bus as well for a node
+// that carries sensors. The bus doesn't exist in the kernel and must not: the shim answers the node's
+// opens of it before they get there (shim/README.md).
+func instanceConfigFor(s *SensorSetup) string {
+	if s == nil || s.Device == "" {
+		return instanceConfig
+	}
+	return instanceConfig + "I2C:\n  I2CDevice: " + s.Device + "\n"
+}
+
 // Hosted is a meshtasticd RepeaterTastic runs, standing in for one of a host's identities.
 type Hosted struct {
 	*Node
@@ -181,6 +205,20 @@ type Hosted struct {
 	started  time.Time
 	stops    []HostedStop
 	logTail  []LogLine
+	// env and sensors are what the next start of the process gets: SetSensors changes them for a
+	// node whose sensors have changed, and the supervisor picks them up when it starts it again.
+	env     []string
+	sensors *SensorSetup
+	// endRun stops the running process without ending the instance (Bounce); bounce says the stop
+	// that follows was asked for, not a failure.
+	endRun context.CancelFunc
+	bounce bool
+	// airAtBoot is whether air quality telemetry was on when the node came up on this run, and
+	// bootRead whether we have read the node since it started. airArmed stops us restarting it for
+	// its air quality setting more than once (see checkSensorBoot).
+	airAtBoot bool
+	bootRead  bool
+	airArmed  bool
 }
 
 // HostedStop is one time meshtasticd stopped.
@@ -213,7 +251,7 @@ func StartHosted(ctx context.Context, l Launcher, in Instance, logf func(string,
 	if err := os.MkdirAll(filepath.Join(in.Dir, "vfs"), 0o700); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(in.ConfigPath(), []byte(instanceConfig), 0o600); err != nil {
+	if err := os.WriteFile(in.ConfigPath(), []byte(instanceConfigFor(in.Sensors)), 0o600); err != nil {
 		return nil, err
 	}
 	ctx, stop := context.WithCancel(ctx)
@@ -221,6 +259,11 @@ func StartHosted(ctx context.Context, l Launcher, in Instance, logf func(string,
 	c := mtclient.New(mtclient.Options{Address: addr, Logf: discardLogf, ReconnectInterval: 500 * time.Millisecond,
 		ConfigTimeout: 30 * time.Second})
 	h := &Hosted{Node: newNode(addr, in.Dir, c, logf), inst: in, launcher: l, ctx: ctx, stop: stop, done: make(chan struct{})}
+	// The sensors and the environment live behind the lock from here on, so a restart can change
+	// them; inst keeps only what never changes.
+	h.env, h.sensors = in.Env, in.Sensors
+	h.inst.Env, h.inst.Sensors = nil, nil
+	h.SetAfterConfigured(h.checkSensorBoot)
 	go func() {
 		defer close(h.done)
 		h.supervise(ctx)
@@ -251,6 +294,8 @@ type HostedStatus struct {
 	Stops     []HostedStop `json:"stops"`
 	Firmware  string       `json:"firmware,omitempty"`
 	NodeID    string       `json:"node_id,omitempty"`
+	// Sensors are the IDs of the host sensors this node publishes as its own (docs/sensors.md).
+	Sensors []string `json:"sensors,omitempty"`
 }
 
 // Status reports the process and link state.
@@ -260,7 +305,8 @@ func (h *Hosted) Status() HostedStatus {
 	defer h.mu.Unlock()
 	st := HostedStatus{Name: h.inst.Name, Launcher: h.launcher.Describe(), Port: h.inst.Port, Running: h.running,
 		Connected: s.Connected, Restarts: h.restarts, Reboots: h.reboots, LastError: h.lastErr,
-		Stops: append([]HostedStop{}, h.stops...), Firmware: s.Metadata.GetFirmwareVersion()}
+		Stops: append([]HostedStop{}, h.stops...), Firmware: s.Metadata.GetFirmwareVersion(),
+		Sensors: h.sensors.Sources()}
 	if h.running {
 		st.Since = h.started.UnixMilli()
 	}
@@ -282,11 +328,12 @@ func (h *Hosted) supervise(ctx context.Context) {
 	for ctx.Err() == nil {
 		pr, pw := io.Pipe()
 		go h.collect(pr)
+		// Each run has its own context, so Bounce can stop this process without ending the instance.
+		rctx, endRun := context.WithCancel(ctx)
 		start := time.Now()
-		h.mu.Lock()
-		h.running, h.started = true, start
-		h.mu.Unlock()
-		err := h.launcher.Run(ctx, h.inst, pw)
+		in := h.startRun(start, endRun)
+		err := h.launcher.Run(rctx, in, pw)
+		endRun()
 		_ = pw.Close()
 		if ctx.Err() != nil {
 			h.setStopped()
@@ -295,13 +342,22 @@ func (h *Hosted) supervise(ctx context.Context) {
 		if err == nil {
 			err = errors.New("exited")
 		}
-		// meshtasticd reboots (exits) to apply some settings: that's expected, not a failure.
-		reboot := time.Since(time.UnixMilli(h.committed.Load())) < rebootWindow
+		bounced := h.tookBounce()
+		if bounced {
+			err = errors.New("restarted to look for its sensors")
+		}
+		// meshtasticd reboots (exits) to apply some settings: that's expected, not a failure. So is
+		// a restart we asked for.
+		reboot := bounced || time.Since(time.UnixMilli(h.committed.Load())) < rebootWindow
 		h.recordStop(err, reboot)
-		if reboot {
+		switch {
+		case bounced:
+			h.logf("meshtasticd %s (%s) restarts to look for its sensors", h.inst.Name, h.launcher.Describe())
+			backoff = time.Second
+		case reboot:
 			h.logf("meshtasticd %s (%s) rebooted to apply its settings", h.inst.Name, h.launcher.Describe())
 			backoff = time.Second
-		} else {
+		default:
 			h.logf("meshtasticd %s (%s) stopped: %v; restarting in %v", h.inst.Name, h.launcher.Describe(), err, backoff)
 		}
 		if time.Since(start) > time.Minute {
@@ -316,6 +372,80 @@ func (h *Hosted) supervise(ctx context.Context) {
 			backoff = min(backoff*2, time.Minute)
 		}
 	}
+}
+
+// startRun notes the process is starting and returns the instance to run with. The sensors and the
+// environment come from here, not from inst, so each start uses the ones the node has now.
+func (h *Hosted) startRun(at time.Time, end context.CancelFunc) Instance {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.running, h.started, h.endRun, h.bootRead = true, at, end, false
+	in := h.inst
+	in.Env, in.Sensors = h.env, h.sensors
+	return in
+}
+
+// tookBounce reports whether the stop that just happened was one Bounce asked for, and forgets it.
+func (h *Hosted) tookBounce() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	b := h.bounce
+	h.bounce = false
+	return b
+}
+
+// Bounce stops the process; the supervisor starts it again straight away, with whatever SetSensors
+// has since put in the instance directory. meshtasticd scans the I²C bus once, at start-up, so a
+// sensor attached to a running node is only found after this. The client, the identity and the
+// node's state directory are untouched, and no other node is affected.
+func (h *Hosted) Bounce() {
+	h.mu.Lock()
+	end := h.endRun
+	// Nothing running yet: its first start already has the current setup.
+	h.bounce = end != nil
+	h.mu.Unlock()
+	if end != nil {
+		end()
+	}
+}
+
+// checkSensorBoot restarts a node carrying a particulate sensor once, if it started without the air
+// quality setting the sensor needs. The firmware's air quality module attaches its sensors only when
+// it is already enabled as the node scans the bus at start-up, and the setting reaches the node from
+// here after it has booted (shim/README.md). Most changes make meshtasticd reboot by itself, which
+// is restart enough; this covers the times it doesn't.
+func (h *Hosted) checkSensorBoot(s mtclient.Snapshot) {
+	on := s.ModuleConfig.GetTelemetry().GetAirQualityEnabled()
+	h.mu.Lock()
+	if !h.bootRead {
+		h.bootRead, h.airAtBoot = true, on
+	}
+	need := h.sensors.AirQuality() && on && !h.airAtBoot && !h.airArmed
+	if need {
+		h.airArmed = true
+	}
+	h.mu.Unlock()
+	if !need {
+		return
+	}
+	h.logf("meshtasticd %s: restarting so it finds its air quality sensor (the setting reached it after it had started)", h.inst.Name)
+	h.Bounce()
+}
+
+// Sensors are the imitated sensors the node carries (nil for a node with none).
+func (h *Hosted) Sensors() *SensorSetup {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.sensors
+}
+
+// SetSensors gives the node the sensors its next start will find, and rewrites its config file so
+// meshtasticd looks for the bus (or stops looking). Call Bounce to have it scan for them.
+func (h *Hosted) SetSensors(env []string, s *SensorSetup) error {
+	h.mu.Lock()
+	h.env, h.sensors = env, s
+	h.mu.Unlock()
+	return os.WriteFile(h.inst.ConfigPath(), []byte(instanceConfigFor(s)), 0o600)
 }
 
 func (h *Hosted) setStopped() {

@@ -25,6 +25,7 @@ import (
 	"github.com/ScotMesh/RepeaterTastic/internal/phoneapi"
 	"github.com/ScotMesh/RepeaterTastic/internal/plugins"
 	"github.com/ScotMesh/RepeaterTastic/internal/radio"
+	"github.com/ScotMesh/RepeaterTastic/internal/sensors"
 	"github.com/ScotMesh/RepeaterTastic/internal/site"
 	"github.com/ScotMesh/RepeaterTastic/internal/wire"
 )
@@ -53,6 +54,13 @@ type Options struct {
 	// Hosted reports the meshtasticd instances the daemon runs (nil = none).
 	// Hosting runs each radio's nodes on meshtasticd, by radio ID.
 	Hosting map[string]*nodes.Hosting
+	// Sensors holds the host's sensors (nil when the host has none: GET /sensors then reports
+	// enabled false and the rest answer 503).
+	Sensors *sensors.Registry
+	// SensorsChanged hands a saved sensors section back to the daemon: the registry takes the new
+	// sources, and hosted nodes learn who publishes what. Nil applies the sources to the registry
+	// and nothing else.
+	SensorsChanged func(config.Sensors) error
 }
 
 // HostedInstance is a meshtasticd the daemon runs, for Configuration → Nodes.
@@ -219,6 +227,9 @@ func (s *Server) Run(ctx context.Context) error {
 		go s.sampleRF(ctx, rc)
 		go s.watchTraceroutes(ctx, rc)
 	}
+	if s.opt.Sensors != nil {
+		go s.forwardSensorReads(ctx) // one subscription, fanned out to every radio's stream
+	}
 	addr := net.JoinHostPort(s.cfg.Web.Bind, strconv.Itoa(s.cfg.Web.Port))
 	srv := &http.Server{Addr: addr, Handler: securityHeaders(s.mux), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
@@ -321,6 +332,7 @@ func (s *Server) routes() {
 	priv("GET /api/v1/stats/rf", s.statsRF)
 	priv("GET /api/v1/stats/identities", s.statsIdentities)
 	s.pluginRoutes(priv)
+	s.sensorRoutes(priv)
 
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "no such endpoint")
@@ -401,14 +413,15 @@ func (e *statusError) Error() string { return e.msg }
 // errStatus makes a statusError.
 func errStatus(code int, msg string) error { return &statusError{code: code, msg: msg} }
 
-// writeStatusError writes err with its status, or with fallback if it doesn't carry one.
-func writeStatusError(w http.ResponseWriter, fallback int, err error) {
+// writeStatusError writes err with the status it carries, or 400 when it carries none: an error
+// from a handler's helper is the caller's fault unless the helper says otherwise.
+func writeStatusError(w http.ResponseWriter, err error) {
 	var se *statusError
 	if errors.As(err, &se) {
 		writeError(w, se.code, se.msg)
 		return
 	}
-	writeError(w, fallback, err.Error())
+	writeError(w, http.StatusBadRequest, err.Error())
 }
 
 func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {

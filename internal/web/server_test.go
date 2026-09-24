@@ -150,12 +150,12 @@ func TestReadJSONAndErrors(t *testing.T) {
 		t.Fatalf("Error() = %q", se.Error())
 	}
 	rec := httptest.NewRecorder()
-	writeStatusError(rec, http.StatusBadRequest, se)
+	writeStatusError(rec, se)
 	if rec.Code != http.StatusTeapot {
 		t.Fatalf("status error code = %d", rec.Code)
 	}
 	rec = httptest.NewRecorder()
-	writeStatusError(rec, http.StatusBadRequest, errors.New("plain"))
+	writeStatusError(rec, errors.New("plain"))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("plain error code = %d", rec.Code)
 	}

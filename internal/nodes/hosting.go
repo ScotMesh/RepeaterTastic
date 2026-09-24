@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ScotMesh/RepeaterTastic/internal/mesh"
+	"github.com/ScotMesh/RepeaterTastic/internal/sensors"
 	"github.com/ScotMesh/RepeaterTastic/internal/wire"
 )
 
@@ -33,6 +34,10 @@ type HostingOptions struct {
 	Logf       func(string, ...any)
 	// NodeLogf, when set, logs for one node (by node ID), so its lines say which identity they're about.
 	NodeLogf func(nodeID string) func(string, ...any)
+	// Sensors, when set, offers each identity the host sensors it publishes as its own: the node is
+	// given an imitated I²C bus and the readings file its shim answers from (sensors.go). nil means
+	// the feature is off and no node carries anything.
+	Sensors SensorSource
 }
 
 // Hosting runs a radio's identities as hosted meshtasticd nodes on its air: a mesh.Hoster.
@@ -63,7 +68,11 @@ func NewHosting(ctx context.Context, o HostingOptions) *Hosting {
 	if o.Logf == nil {
 		o.Logf = discardLogf
 	}
-	return &Hosting{ctx: ctx, opts: o, nodes: map[*Node]*hostedEntry{}, starting: map[int]bool{}}
+	x := &Hosting{ctx: ctx, opts: o, nodes: map[*Node]*hostedEntry{}, starting: map[int]bool{}}
+	if o.Sensors != nil {
+		go x.followSensors(ctx)
+	}
+	return x
 }
 
 // HostIdentity starts a meshtasticd for rec, seeded with its key, and adds its identity to h.
@@ -104,9 +113,16 @@ func (x *Hosting) HostIdentity(ctx context.Context, h *mesh.Host, rec mesh.Ident
 	if x.opts.NodeLogf != nil {
 		logf = x.opts.NodeLogf(wire.NodeID(num))
 	}
+	plan := x.planFor(rec.ShortName, wire.NodeID(num), logf)
+	if err := seedSensors(x.opts.Launcher, &in, x.opts.Sensors, plan); err != nil {
+		return nil, err
+	}
 	hn, err := StartHosted(x.ctx, x.opts.Launcher, in, logf)
 	if err != nil {
 		return nil, err
+	}
+	if x.opts.Sensors != nil {
+		hn.SetSensorTelemetry(plan != nil, plan.AirQuality(), x.envInterval())
 	}
 	if rec.IsRelay && x.opts.RelayOwner != nil {
 		hn.SetOwner(x.opts.RelayOwner())
@@ -133,7 +149,127 @@ func (x *Hosting) HostIdentity(ctx context.Context, h *mesh.Host, rec mesh.Ident
 	x.nodes[hn.Node] = &hostedEntry{hn: hn, host: h, slot: slot, role: role, started: time.Now(), running: done}
 	x.mu.Unlock()
 	logf("meshtasticd: %s %s runs on %s, port %d", role, id.NodeID(), x.opts.Launcher.Describe(), in.Port)
+	if plan != nil {
+		logf("meshtasticd: %s %s carries %s as %s", role, id.NodeID(),
+			strings.Join(plan.Sources(), ", "), sensors.ChipNames(plan.Chips))
+	}
 	return id, nil
+}
+
+// planFor is what the identity with these names publishes, or nil: nothing attached, or the sensors
+// feature off.
+func (x *Hosting) planFor(shortName, nodeID string, logf func(string, ...any)) *SensorSetup {
+	if x.opts.Sensors == nil {
+		return nil
+	}
+	return planSensors(x.opts.Sensors, x.opts.Sensors.For(shortName, nodeID), logf)
+}
+
+// envInterval is how often a node carrying sensors is asked to broadcast them, never more often
+// than the firmware's own floor.
+func (x *Hosting) envInterval() time.Duration {
+	if x.opts.Sensors == nil {
+		return 0
+	}
+	return max(x.opts.Sensors.Interval(), MinEnvInterval)
+}
+
+// followSensors rewrites each node's readings file as new readings arrive, until ctx ends. That is
+// all it takes: the node reads the file itself on its own schedule, so nothing restarts and
+// RepeaterTastic sends no packet.
+func (x *Hosting) followSensors(ctx context.Context) {
+	ch, stop := x.opts.Sensors.Subscribe(32)
+	defer stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case id, ok := <-ch:
+			if !ok {
+				return
+			}
+			x.writeValues(id)
+		}
+	}
+}
+
+// writeValues puts the current readings in the file of every node that publishes source id. The
+// file is left alone when the bytes don't change, so an unchanged reading doesn't churn a directory
+// per identity per minute.
+func (x *Hosting) writeValues(id string) {
+	x.mu.Lock()
+	var hs []*Hosted
+	for _, e := range x.nodes {
+		if e.hn.Sensors().publishes(id) {
+			hs = append(hs, e.hn)
+		}
+	}
+	x.mu.Unlock()
+	for _, hn := range hs {
+		p := hn.Sensors()
+		if p == nil {
+			continue // its sensors changed while we looked
+		}
+		if _, err := sensors.WriteValuesFile(valuesPath(hn.Instance().Dir), valuesFor(x.opts.Sensors, p)); err != nil {
+			x.opts.Logf("sensors: %s: %v", hn.Instance().Name, err)
+		}
+	}
+}
+
+// Restart stops one identity's meshtasticd and starts it again, so it finds the sensors it now
+// carries: meshtasticd scans the I²C bus once, at start-up. Every other node keeps running, and this
+// one keeps its key, its settings and its client API port.
+func (x *Hosting) Restart(nodeID string) error {
+	want := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(nodeID), "!"))
+	if want == "" {
+		return errors.New("say which identity's node to restart")
+	}
+	x.mu.Lock()
+	var found *hostedEntry
+	for _, e := range x.nodes {
+		if id := e.hn.Current(); id != nil && strings.TrimPrefix(strings.ToLower(id.NodeID()), "!") == want {
+			found = e
+			break
+		}
+	}
+	x.mu.Unlock()
+	if found == nil {
+		return fmt.Errorf("no meshtasticd on radio %s stands for !%s: check the identity is hosted on this radio", x.opts.Radio, want)
+	}
+	if err := x.reseed(found); err != nil {
+		return err
+	}
+	found.hn.Bounce()
+	x.opts.Logf("meshtasticd: %s !%s restarts to look for its sensors", found.role, want)
+	return nil
+}
+
+// reseed re-plans a node's sensors and writes them into its instance directory, ready for the next
+// start. The node keeps running until something stops it (Bounce).
+func (x *Hosting) reseed(e *hostedEntry) error {
+	if x.opts.Sensors == nil {
+		return nil
+	}
+	short, nodeID := "", ""
+	if seed := e.hn.Seed(); seed != nil {
+		short = seed.ShortName
+	}
+	if id := e.hn.Current(); id != nil {
+		nodeID = id.NodeID()
+		if short == "" {
+			short = id.UserCopy().GetShortName()
+		}
+	}
+	in := e.hn.Instance()
+	plan := x.planFor(short, nodeID, x.opts.Logf)
+	if err := seedSensors(x.opts.Launcher, &in, x.opts.Sensors, plan); err != nil {
+		return err
+	}
+	if err := e.hn.SetSensors(in.Env, in.Sensors); err != nil {
+		return err
+	}
+	e.hn.SetSensorTelemetry(plan != nil, plan.AirQuality(), x.envInterval())
+	return nil
 }
 
 // freeSlot is the lowest identity port slot not in use, or 0. Called with mu held.

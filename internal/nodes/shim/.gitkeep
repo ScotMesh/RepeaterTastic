@@ -1,0 +1,8 @@
+# `make shim` puts the built libraries here, one per architecture, and the binary embeds them:
+#
+#   i2cshim-linux-amd64.so
+#   i2cshim-linux-arm64.so
+#
+# They are built by shim/build.sh into shim/build/ and copied in. The directory is committed empty
+# so the embed pattern in ../shim.go always matches something: a build without the libraries is
+# fine, and a node that needs one says so when it starts.

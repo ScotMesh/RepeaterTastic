@@ -356,19 +356,19 @@ func TestStartRadioFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.StateDir = filepath.Join(blocker, "state")
-	if _, err := startRadio(ctx, config.RadioConfig{ID: "main", Config: cfg}, 0, discardLog(), nil); err == nil {
+	if _, err := startRadio(ctx, config.RadioConfig{ID: "main", Config: cfg}, 0, discardLog(), nil, nil); err == nil {
 		t.Fatal("state dir under a file accepted")
 	}
 
 	cfg = testConfig(t)
 	cfg.Radio.Driver, cfg.Radio.Device = "meshtastic", "host:notaport"
-	if _, err := startRadios(ctx, cfg.RadioConfigs(), discardLog()); err == nil || !strings.Contains(err.Error(), "radio main") {
+	if _, err := startRadios(ctx, cfg.RadioConfigs(), discardLog(), nil); err == nil || !strings.Contains(err.Error(), "radio main") {
 		t.Fatalf("bad board: %v", err)
 	}
 
 	cfg = testConfig(t)
 	cfg.Mesh.Region = "NOWHERE"
-	if _, err := startRadio(ctx, config.RadioConfig{ID: "main", Config: cfg}, 0, discardLog(), nil); err == nil {
+	if _, err := startRadio(ctx, config.RadioConfig{ID: "main", Config: cfg}, 0, discardLog(), nil, nil); err == nil {
 		t.Fatal("unknown region accepted")
 	}
 
@@ -377,7 +377,7 @@ func TestStartRadioFailures(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cfg.StateDir, "identities.json"), []byte("{not json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := startRadio(ctx, config.RadioConfig{ID: "main", Config: cfg}, 0, discardLog(), nil); err == nil {
+	if _, err := startRadio(ctx, config.RadioConfig{ID: "main", Config: cfg}, 0, discardLog(), nil, nil); err == nil {
 		t.Fatal("corrupt identities accepted")
 	}
 
@@ -385,7 +385,7 @@ func TestStartRadioFailures(t *testing.T) {
 	cfg.Hosted.Meshtasticd = filepath.Join(t.TempDir(), "no-meshtasticd")
 	cfg.Links.UDPMulticast.Enabled = true
 	cfg.Links.UDPMulticast.Group = "[bad"
-	if _, err := startRadio(ctx, config.RadioConfig{ID: "main", Config: cfg}, 0, discardLog(), nil); err == nil {
+	if _, err := startRadio(ctx, config.RadioConfig{ID: "main", Config: cfg}, 0, discardLog(), nil, nil); err == nil {
 		t.Fatal("bad multicast group accepted")
 	}
 }
@@ -445,7 +445,7 @@ func TestStartPluginsFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.Plugins.Dir = filepath.Join(blocker, "plugins")
-	if _, err := startPlugins(ctx, cfg, radios, discardLog()); err == nil || !strings.HasPrefix(err.Error(), "plugins: ") {
+	if _, err := startPlugins(ctx, cfg, radios, nil, discardLog()); err == nil || !strings.HasPrefix(err.Error(), "plugins: ") {
 		t.Fatalf("plugin dir under a file: %v", err)
 	}
 
@@ -453,7 +453,7 @@ func TestStartPluginsFailures(t *testing.T) {
 	cfg = testConfig(t)
 	cfg.Plugins.Listen = "127.0.0.1:notaport"
 	h := &recordHandler{}
-	pm, err := startPlugins(ctx, cfg, radios, slog.New(h))
+	pm, err := startPlugins(ctx, cfg, radios, nil, slog.New(h))
 	if err != nil || pm == nil {
 		t.Fatalf("got %v %v", pm, err)
 	}

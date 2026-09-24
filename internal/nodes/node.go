@@ -48,6 +48,11 @@ type Node struct {
 	// hopsBehind is how far the node is from the air (1 behind a board): its hop limit is that much
 	// higher, so its packets reach as far as the relay's.
 	hopsBehind uint32
+	// senTel, when set, says which telemetry the sensors the node carries need, and how often it
+	// broadcasts them (docs/sensors.md). nil leaves the node's own settings alone.
+	senTel *sensorTelemetry
+	// afterConfigured, when set, is called with the node's state each time it has been read.
+	afterConfigured func(mtclient.Snapshot)
 
 	// rebootWait is how long a settings change waits for the node to reboot before re-reading it.
 	rebootWait time.Duration
@@ -151,6 +156,31 @@ func (n *Node) SetExtraSettings(fn func(mtclient.Snapshot) []*pb.AdminMessage) {
 	n.mu.Unlock()
 }
 
+// sensorTelemetry is the telemetry a node carrying sensors is asked for: the environment module for
+// temperature, humidity, voltage and current, and the air quality module for the particulate values.
+type sensorTelemetry struct {
+	env   bool
+	air   bool
+	every time.Duration
+}
+
+// SetSensorTelemetry makes the node broadcast the sensors it carries every so often, or, with both
+// off, makes sure it broadcasts none. It is set only for a host that has the sensors feature on: a
+// node that is never told keeps whatever settings it has.
+func (n *Node) SetSensorTelemetry(env, air bool, every time.Duration) {
+	n.mu.Lock()
+	n.senTel = &sensorTelemetry{env: env, air: air, every: every}
+	n.mu.Unlock()
+}
+
+// SetAfterConfigured sets a hook called with the node's state whenever it has been read, after the
+// host has been brought in line with it.
+func (n *Node) SetAfterConfigured(fn func(mtclient.Snapshot)) {
+	n.mu.Lock()
+	n.afterConfigured = fn
+	n.mu.Unlock()
+}
+
 // SetHopsBehind says how many hops from the air the node is.
 func (n *Node) SetHopsBehind(hops uint32) {
 	n.mu.Lock()
@@ -233,6 +263,12 @@ func (n *Node) configured(ctx context.Context) {
 	}
 	n.logf("meshtasticd: node %s %q on %s, firmware %s, %s %s", cur.NodeID(), st.User.GetLongName(), n.addr,
 		snap.Metadata.GetFirmwareVersion(), snap.Config.GetLora().GetRegion(), snap.Config.GetLora().GetModemPreset())
+	n.mu.Lock()
+	after := n.afterConfigured
+	n.mu.Unlock()
+	if after != nil {
+		after(snap)
+	}
 }
 
 // giveKey gives a fresh node (or one whose key was changed) the saved identity first. It comes

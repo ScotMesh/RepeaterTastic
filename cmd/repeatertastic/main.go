@@ -91,7 +91,17 @@ func run(cfgPath string) error {
 	}
 	applyStagedIdentities(cfg, log)
 
-	radios, err := startRadios(ctx, cfg.RadioConfigs(), log)
+	// Always running, even with nothing configured: a sensor added in the GUI works without a restart.
+	sh, err := newSensorHub(cfg.Sensors, log)
+	if err != nil {
+		return err
+	}
+	go sh.Run(ctx)
+	if cfg.Sensors.Enabled() {
+		log.Info("sensors", "sources", len(cfg.Sensors.Sources), "attachments", len(cfg.Sensors.Attach))
+	}
+
+	radios, err := startRadios(ctx, cfg.RadioConfigs(), log, sh)
 	for _, rt := range radios {
 		defer rt.radio.Close()
 	}
@@ -110,7 +120,7 @@ func run(cfgPath string) error {
 
 	var pm *plugins.Manager
 	if cfg.Plugins.Enabled {
-		if pm, err = startPlugins(ctx, cfg, radios, log); err != nil {
+		if pm, err = startPlugins(ctx, cfg, radios, sh, log); err != nil {
 			return err
 		}
 		defer func() { stop(); pm.Wait() }() // plugins stop before the radios close
@@ -118,6 +128,7 @@ func run(cfgPath string) error {
 
 	if cfg.Web.Enabled {
 		opts := web.Options{Config: cfg, Logs: logs, LogLevel: level, Plugins: pm,
+			Sensors: sh.Registry(), SensorsChanged: sh.Set,
 			Restart: func() { restartRequested.Store(true); stop() },
 			Site:    st, Version: version, Log: log}
 		if err := startWeb(ctx, opts, radios, log); err != nil {
@@ -151,7 +162,7 @@ func applyStagedIdentities(cfg *config.Config, log *slog.Logger) {
 
 // startRadios starts every radio in order. On failure it still returns the radios that
 // started, so the caller can close them.
-func startRadios(ctx context.Context, rcs []config.RadioConfig, log *slog.Logger) ([]*radioRuntime, error) {
+func startRadios(ctx context.Context, rcs []config.RadioConfig, log *slog.Logger, sh *sensorHub) ([]*radioRuntime, error) {
 	uplinked := mqtt.NewUplinked() // one per site: a packet heard on two radios is published once
 	var radios []*radioRuntime
 	for _, rc := range rcs {
@@ -159,7 +170,7 @@ func startRadios(ctx context.Context, rcs []config.RadioConfig, log *slog.Logger
 		if len(rcs) > 1 {
 			rlog = log.With("radio", rc.ID)
 		}
-		rt, err := startRadio(ctx, rc, len(radios), rlog, uplinked)
+		rt, err := startRadio(ctx, rc, len(radios), rlog, uplinked, sh)
 		if err != nil {
 			return radios, fmt.Errorf("radio %s: %w", rc.ID, err)
 		}
@@ -211,13 +222,14 @@ func newSite(cfg *config.Config, radios []*radioRuntime, log *slog.Logger) *site
 
 // startPlugins creates and starts the plugin manager. Only a manager that can't be created is
 // an error: a repeater keeps repeating even if plugins can't start.
-func startPlugins(ctx context.Context, cfg *config.Config, radios []*radioRuntime, log *slog.Logger) (*plugins.Manager, error) {
+func startPlugins(ctx context.Context, cfg *config.Config, radios []*radioRuntime, sh *sensorHub, log *slog.Logger) (*plugins.Manager, error) {
 	prs := make([]plugins.Radio, 0, len(radios))
 	for _, rt := range radios {
 		prs = append(prs, plugins.Radio{ID: rt.rc.ID, Name: rt.rc.Name, Host: rt.host})
 	}
 	pm, err := plugins.New(plugins.Options{Config: cfg.Plugins, Dir: cfg.PluginDir(), Radios: prs, Version: version, Log: log,
-		Notify: func(id string) { publishAll(radios, mesh.Event{Type: "plugin", Data: id}) }})
+		Sensors: sh.Registry(),
+		Notify:  func(id string) { publishAll(radios, mesh.Event{Type: "plugin", Data: id}) }})
 	if err != nil {
 		return nil, fmt.Errorf("plugins: %w", err)
 	}
