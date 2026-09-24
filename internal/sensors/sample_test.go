@@ -1,9 +1,12 @@
 package sensors
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -317,4 +320,61 @@ func waitFor(t *testing.T, ids <-chan string, want string) {
 			t.Fatalf("no reading for %q", want)
 		}
 	}
+}
+
+// A command that never stops printing must cost us a fixed amount of memory, not the daemon: one
+// wrong command in a config field used to be enough to have the repeater OOM-killed.
+func TestExecOutputIsCapped(t *testing.T) {
+	r, _ := testReg(t)
+	r.maxWait = 2 * time.Second
+	mustApply(t, r, Source{ID: "flood", Kind: Exec, Command: `yes temperature=21.5`, Interval: time.Minute})
+
+	_, err := r.ReadNow(context.Background(), "flood")
+	if err == nil || !strings.Contains(err.Error(), "printed more than") {
+		t.Fatalf("ReadNow error = %v, want one about the command printing too much", err)
+	}
+}
+
+// The writer keeps its limit and remembers that it threw output away.
+func TestCappedWriter(t *testing.T) {
+	c := &capped{limit: 8}
+	n, err := c.Write([]byte("12345"))
+	if n != 5 || err != nil || c.dropped {
+		t.Fatalf("short write: n=%d err=%v dropped=%v", n, err, c.dropped)
+	}
+	// A writer that reported a short count would make the command fail with "broken pipe" instead
+	// of finishing, so the whole write is always claimed.
+	if n, err := c.Write([]byte("6789abc")); n != 7 || err != nil {
+		t.Fatalf("overflowing write: n=%d err=%v", n, err)
+	}
+	if got := string(c.Bytes()); got != "12345678" || !c.dropped {
+		t.Fatalf("kept %q dropped=%v, want the first 8 bytes and the flag set", got, c.dropped)
+	}
+}
+
+// A timed-out command takes its children with it. Killing only the shell left them running, one per
+// interval, for as long as the daemon ran.
+func TestExecTimeoutKillsTheWholePipeline(t *testing.T) {
+	if _, err := exec.LookPath("pgrep"); err != nil {
+		t.Skip("pgrep not available")
+	}
+	marker := fmt.Sprintf("rt-sensor-orphan-%d", time.Now().UnixNano())
+	r, _ := testReg(t)
+	r.maxWait = 300 * time.Millisecond
+	mustApply(t, r, Source{ID: "hang", Kind: Exec,
+		Command: fmt.Sprintf(`sh -c 'sleep 45 %s' & wait`, marker), Interval: time.Minute})
+	t.Cleanup(func() { _ = exec.Command("pkill", "-f", marker).Run() })
+
+	if _, err := r.ReadNow(context.Background(), "hang"); err == nil {
+		t.Fatal("a hung command was not killed")
+	}
+	// Give the kernel a moment to reap the group before looking for survivors.
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if out, _ := exec.Command("pgrep", "-f", marker).Output(); len(bytes.TrimSpace(out)) == 0 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("a child of the timed-out command was still running")
 }

@@ -3,12 +3,14 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -576,4 +578,48 @@ func hasString(list []string, want string) bool { return slices.Contains(list, w
 func contains(v any, want string) bool {
 	s, _ := v.(string)
 	return strings.Contains(s, want)
+}
+
+// Two edits arriving together must both survive: each handler reads the section, changes it and
+// saves it, so without serialising them the second would start from the old section and drop the
+// first one's sensor.
+func TestConcurrentSensorAddsAllSurvive(t *testing.T) {
+	env := newSensorEnv(t)
+	tok := env.tok
+
+	const n = 8
+	var wg sync.WaitGroup
+	codes := make([]int, n)
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			body := map[string]any{"id": fmt.Sprintf("s%d", i), "kind": "push"}
+			codes[i], _, _ = call(t, env.srv, "POST", "/api/v1/sensors", tok, body)
+		}()
+	}
+	wg.Wait()
+	for i, code := range codes {
+		if code != http.StatusCreated {
+			t.Fatalf("add s%d: %d", i, code)
+		}
+	}
+
+	code, obj, _ := call(t, env.srv, "GET", "/api/v1/sensors", tok, nil)
+	if code != http.StatusOK {
+		t.Fatalf("list: %d", code)
+	}
+	got := map[string]bool{}
+	for _, raw := range obj["sensors"].([]any) {
+		got[raw.(map[string]any)["id"].(string)] = true
+	}
+	for i := range n {
+		if id := fmt.Sprintf("s%d", i); !got[id] {
+			t.Errorf("%s was lost: %d of %d sensors survived", id, len(got), n)
+		}
+	}
+	// And the file on disk agrees with what the API reports.
+	if saved := env.reload(t); len(saved.Sources) != len(got) {
+		t.Errorf("config file holds %d sensors, the API reports %d", len(saved.Sources), len(got))
+	}
 }

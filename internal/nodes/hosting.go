@@ -50,6 +50,9 @@ type Hosting struct {
 	starting  map[int]bool // port slots held by starts in progress
 	version   string       // meshtasticd's version, once checked
 	launchErr string       // why meshtasticd can't run, from the last check
+	// valuesQuiet remembers, per node, that its last readings-file write failed, so the same
+	// failure is logged once rather than at every reading.
+	valuesQuiet map[string]bool
 }
 
 type hostedEntry struct {
@@ -210,9 +213,27 @@ func (x *Hosting) writeValues(id string) {
 		if p == nil {
 			continue // its sensors changed while we looked
 		}
-		if _, err := sensors.WriteValuesFile(valuesPath(hn.Instance().Dir), valuesFor(x.opts.Sensors, p)); err != nil {
-			x.opts.Logf("sensors: %s: %v", hn.Instance().Name, err)
-		}
+		_, err := sensors.WriteValuesFile(valuesPath(hn.Instance().Dir), valuesFor(x.opts.Sensors, p))
+		x.noteValuesWrite(hn.Instance().Name, err)
+	}
+}
+
+// noteValuesWrite logs a node's first failed write and its recovery, not every one: a directory
+// that can't be written fails again at every reading, and a line a minute per identity would bury
+// the log.
+func (x *Hosting) noteValuesWrite(name string, err error) {
+	x.mu.Lock()
+	if x.valuesQuiet == nil {
+		x.valuesQuiet = map[string]bool{}
+	}
+	quiet := x.valuesQuiet[name]
+	x.valuesQuiet[name] = err != nil
+	x.mu.Unlock()
+	switch {
+	case err != nil && !quiet:
+		x.opts.Logf("sensors: %s: %v", name, err)
+	case err == nil && quiet:
+		x.opts.Logf("sensors: %s: its readings file can be written again", name)
 	}
 }
 

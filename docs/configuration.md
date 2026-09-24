@@ -253,6 +253,10 @@ Extra radios and the site-wide airtime cap are covered in [Several radios](radio
 Host sensors and which identities publish them. Each identity's meshtasticd sends the telemetry
 itself, so one reading can appear on as many identities as you like. See [Sensors](sensors.md#setting-it-up-in-the-config-file).
 
+A sensor of kind `exec` runs a command as the user the daemon runs as, and `file` reads any file it
+can read. The GUI and every API token can add one, and tokens aren't scoped, so treat a token as
+full access to the host ([Sensors](sensors.md#who-can-add-one-and-what-that-means)).
+
 ### `plugins`
 
 The plugin system: its folder, the TCP address for attached plugins, URL installs, send budgets and

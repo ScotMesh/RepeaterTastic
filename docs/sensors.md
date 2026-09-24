@@ -76,6 +76,17 @@ error in the GUI.
 scale: {current: 0.001}   # the script prints mA, Meshtastic wants A
 ```
 
+### Who can add one, and what that means
+
+An `exec` sensor runs a command as the user RepeaterTastic runs as, and a `file` sensor reads any
+file that user can read. So adding a sensor is as privileged as editing the config file: anyone who
+can sign in to the GUI, **or who holds an API token**, can run commands on the host. API tokens are
+not scoped — a token you gave Home Assistant for reading statistics can do this too.
+
+That is the same level of trust the GUI already needs (it installs plugins and restores backups), but
+it is worth knowing before you hand a token out. If you want a sensor without granting that, use a
+`push` sensor: it has nothing to run, and whatever feeds it needs no access to the host.
+
 ## Which fields can be published
 
 Meshtastic telemetry has a fixed set of environment fields, and each one reaches the air by way of a

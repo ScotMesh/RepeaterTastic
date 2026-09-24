@@ -20,13 +20,15 @@ const pushWindow = 15 * time.Minute
 
 // Status is one source as the GUI shows it: what it is, its last reading, and how it is behaving.
 type Status struct {
-	Source `json:",inline"` // flatten in JSON: id, name, kind, ...
-	Last   Reading          `json:"last"`
-	AgeMs  int64            `json:"age_ms"`
-	Fresh  bool             `json:"fresh"` // read within 3× its interval (push: 15m)
-	Err    string           `json:"error,omitempty"`
-	Reads  uint64           `json:"reads"`
-	Errors uint64           `json:"errors"`
+	// Source's fields flatten into the JSON object because it is embedded; the tag is a note to the
+	// reader, not something encoding/json acts on. A named field added here would nest instead.
+	Source
+	Last   Reading `json:"last"`
+	AgeMs  int64   `json:"age_ms"`
+	Fresh  bool    `json:"fresh"` // read within 3× its interval (push: 15m)
+	Err    string  `json:"error,omitempty"`
+	Reads  uint64  `json:"reads"`
+	Errors uint64  `json:"errors"`
 }
 
 // entry is one source and everything we have learnt about it. Readings are never edited once
@@ -312,12 +314,13 @@ func (r *Registry) record(id string, rd Reading, readErr error) {
 	case logRecovery:
 		r.log.Info("sensor is reading again", "sensor", id)
 	}
-	if readErr == nil {
-		r.publish(id)
-	}
+	// Both outcomes are published: a sensor that starts failing has to reach the GUI as promptly as
+	// one that reads, or its error sits there unseen until someone presses Refresh.
+	r.publish(id)
 }
 
-// publish tells subscribers a reading landed, dropping the id for anyone whose buffer is full.
+// publish tells subscribers a source changed — a reading landed, or a read failed — dropping the id
+// for anyone whose buffer is full.
 func (r *Registry) publish(id string) {
 	r.subMu.Lock()
 	defer r.subMu.Unlock()

@@ -105,7 +105,11 @@ type Server struct {
 	log  *slog.Logger
 	mux  *http.ServeMux
 
-	cfgMu      sync.Mutex
+	cfgMu sync.Mutex
+	// sensorMu serialises a sensor change from reading the section to saving it. cfgMu guards each
+	// access to the field, which isn't enough on its own: two edits arriving together would both
+	// start from the old section and the second would drop the first one's change.
+	sensorMu   sync.Mutex
 	loginFails sync.Map // ip → *loginState
 
 	radios []*radioCtx // main first

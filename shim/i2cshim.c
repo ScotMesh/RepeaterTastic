@@ -336,6 +336,10 @@ static int value_lookup(const char *key, double *out)
     int fd = r_open64 ? r_open64(g_values, O_RDONLY | O_CLOEXEC) : r_open(g_values, O_RDONLY | O_CLOEXEC);
     if (fd < 0)
         return 0;
+    /* One line per field, a dozen fields: 8 KiB is far more than a readings
+     * file ever needs. A longer file is read up to here and the rest ignored,
+     * so a field near the end would read as its default -- keep the file small,
+     * or raise this together with sensors.RenderValues. */
     char buf[8192];
     ssize_t n = r_read(fd, buf, sizeof(buf) - 1);
     if (r_close)

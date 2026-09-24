@@ -240,6 +240,8 @@ func (s *Server) addSensor(w http.ResponseWriter, r *http.Request) {
 	if s.sensorRegistry(w) == nil {
 		return
 	}
+	s.sensorMu.Lock() // one change at a time, from reading the section to saving it
+	defer s.sensorMu.Unlock()
 	src, ok := readSource(w, r, "")
 	if !ok {
 		return
@@ -267,6 +269,8 @@ func (s *Server) updateSensor(w http.ResponseWriter, r *http.Request) {
 	if s.sensorRegistry(w) == nil {
 		return
 	}
+	s.sensorMu.Lock() // one change at a time, from reading the section to saving it
+	defer s.sensorMu.Unlock()
 	id := r.PathValue("id")
 	src, ok := readSource(w, r, id)
 	if !ok {
@@ -317,6 +321,8 @@ func (s *Server) deleteSensor(w http.ResponseWriter, r *http.Request) {
 	if s.sensorRegistry(w) == nil {
 		return
 	}
+	s.sensorMu.Lock() // one change at a time, from reading the section to saving it
+	defer s.sensorMu.Unlock()
 	id := r.PathValue("id")
 	s.cfgMu.Lock()
 	next := s.cfg.Sensors
@@ -411,6 +417,8 @@ func (s *Server) putSensorInterval(w http.ResponseWriter, r *http.Request) {
 	if s.sensorRegistry(w) == nil {
 		return
 	}
+	s.sensorMu.Lock() // one change at a time, from reading the section to saving it
+	defer s.sensorMu.Unlock()
 	var req struct {
 		Interval string `json:"interval"`
 	}
@@ -526,6 +534,8 @@ func (s *Server) putIdentitySensors(w http.ResponseWriter, r *http.Request) {
 	if s.sensorRegistry(w) == nil {
 		return
 	}
+	s.sensorMu.Lock() // one change at a time, from reading the section to saving it
+	defer s.sensorMu.Unlock()
 	id := s.identityParam(w, r)
 	if id == nil {
 		return

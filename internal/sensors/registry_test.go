@@ -1,6 +1,7 @@
 package sensors
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"sync"
@@ -427,5 +428,29 @@ func TestStatusJSONIsFlat(t *testing.T) {
 	}
 	if got["error"] != nil {
 		t.Errorf("a clean status carries an error key: %s", b)
+	}
+}
+
+// A read that fails is published like a read that works: the GUI promises to show a sensor's error
+// as it happens (docs/api.md, the "sensor" event), and it has nothing else to tell it.
+func TestFailedReadIsPublished(t *testing.T) {
+	r, _ := testReg(t)
+	mustApply(t, r, Source{ID: "shed", Kind: Exec, Command: "exit 3", Interval: time.Minute})
+	ch, stop := r.Subscribe(4)
+	defer stop()
+
+	if _, err := r.ReadNow(context.Background(), "shed"); err == nil {
+		t.Fatal("a command that exits 3 should fail")
+	}
+	select {
+	case id := <-ch:
+		if id != "shed" {
+			t.Fatalf("published %q, want shed", id)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a failed read told nobody; its error would sit unseen until someone pressed Refresh")
+	}
+	if st := statusByID(r)["shed"]; st.Err == "" {
+		t.Errorf("status = %+v, want the error kept", st)
 	}
 }
