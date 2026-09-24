@@ -166,15 +166,24 @@ type Chip struct {
 	Fields []Field // what it can carry
 }
 
-// Chips are the imitations the shim implements, in the order they are planned. The shim can also
-// imitate an MCP9808, which carries temperature too; PCT2075 owns temperature here because exactly
-// one chip may own a field. Fields no chip carries (pressure, lux, distance, radiation, rainfall)
-// are refused with a message rather than silently dropped — see shim/README.md to add one.
+// Chips are the imitations the shim implements, in the order they are planned. Exactly one chip owns
+// each field: the firmware merges every sensor it finds into one packet, last writer wins, so two
+// chips reporting the same field would be a coin toss. The shim can imitate others (an MCP9808 for
+// temperature, an LPS22HB for pressure) that are not listed for that reason, or because the Linux
+// meshtasticd package is built without their driver.
+//
+// Radiation is missing on purpose: a RadSens reading reaches the firmware through a code path that
+// sign-extends any byte over 0x7F (char RXbuf in Portduino's LinuxHardwareI2C), so most values come
+// out as nonsense. shim/README.md has the detail; the chip model is written and waiting.
 var Chips = []Chip{
 	{"pct2075", 0x37, []Field{Temperature}},
 	{"aht10", 0x38, []Field{Humidity}},
+	{"bmp280", 0x76, []Field{Pressure}},
+	{"bh1750", 0x23, []Field{Lux}},
 	{"pmsa003i", 0x12, []Field{PM10, PM25, PM100}},
 	{"ina226", 0x40, []Field{Voltage, Current}},
+	{"rcwl9620", 0x57, []Field{Distance}},
+	{"dfrobot_rain", 0x1D, []Field{Rainfall1h, Rainfall24h}},
 }
 
 // Publishable lists the fields an identity can publish today, in Fields order: those an imitated

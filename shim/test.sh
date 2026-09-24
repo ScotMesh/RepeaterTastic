@@ -31,7 +31,7 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT INT TERM
 
 DEV=/dev/i2c-selftest
-CHIPS=pct2075,mcp9808,ina226,aht10,pmsa003i
+CHIPS="${I2CSHIM_CHIPS:-pct2075,mcp9808,ina226,aht10,pmsa003i,bh1750,rcwl9620,cgradsens,dfrobot_rain,lps22,bmp280}"
 
 # run <label> <so> <replay binary> [runner ...]
 run_replay() {

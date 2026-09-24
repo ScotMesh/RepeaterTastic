@@ -99,9 +99,9 @@ func TestRenderValuesNarrowsToWantedFields(t *testing.T) {
 	if RenderValues(Reading{}, nil) != nil {
 		t.Error("a reading with no fields wrote a file")
 	}
-	// Pressure is a field we know but no imitated chip carries, so it is left out.
-	if got := string(RenderValues(Reading{Fields: map[Field]float64{Pressure: 1013.2, Temperature: 1}}, nil)); strings.Contains(got, "pressure") {
-		t.Errorf("RenderValues = %q, want pressure left out", got)
+	// Radiation is a field we know but no chip may carry, so it is left out of the file.
+	if got := string(RenderValues(Reading{Fields: map[Field]float64{Radiation: 13.7, Temperature: 1}}, nil)); strings.Contains(got, "radiation") {
+		t.Errorf("RenderValues = %q, want radiation left out", got)
 	}
 }
 
@@ -127,8 +127,9 @@ func TestPlanChipsCarriesWhatWeRender(t *testing.T) {
 		{"one field, one chip", []Field{Temperature}, "pct2075", nil},
 		{"two fields on one chip", []Field{Voltage, Current}, "ina226", nil},
 		{"chips come in a fixed order", []Field{PM25, Humidity}, "aht10,pmsa003i", nil},
-		{"no chip carries pressure", []Field{Temperature, Pressure}, "pct2075", []Field{Pressure}},
-		{"nor lux, yet", []Field{Lux}, "", []Field{Lux}},
+		{"pressure and temperature, two chips", []Field{Temperature, Pressure}, "pct2075,bmp280", nil},
+		{"lux rides on a BH1750", []Field{Lux}, "bh1750", nil},
+		{"radiation is the one field with no chip", []Field{Radiation}, "", []Field{Radiation}},
 		{"nothing at all", nil, "", nil},
 	}
 	for _, tc := range cases {

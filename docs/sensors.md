@@ -98,14 +98,27 @@ owns each field.
 | --- | --- | --- | --- |
 | `temperature` | °C | PCT2075 | 0x37 |
 | `humidity` | % | AHT10 | 0x38 |
+| `pressure` | hPa | BMP280 | 0x76 |
+| `lux` | lx | BH1750 | 0x23 |
 | `pm10` `pm25` `pm100` | µg/m³ | PMSA003I | 0x12 |
 | `voltage` `current` | V, A | INA226 | 0x40 |
+| `distance` | mm | RCWL-9620 | 0x57 |
+| `rainfall_1h` `rainfall_24h` | mm | DFRobot SEN0575 | 0x1D |
 
-Those four are the chips the shim imitates today, each proven on a stock meshtasticd. Anything
-Meshtastic can carry but they can't — `pressure`, `lux`, `distance`, `radiation`, `rainfall_1h`,
-`rainfall_24h` — is refused with a message saying so, rather than quietly dropped. Adding one is a
-chip model in `shim/i2cshim.c` and a row in the table in `internal/sensors/api.go`; `shim/README.md`
-explains how, and the self-test is where you prove it.
+Every one of those has been watched arriving at an app connected to a stock meshtasticd, not merely
+implemented. `lux` is the only one that isn't exact: a BH1750 counts in units of 1/1.2 lx, so 480.5
+comes back as 480.83 — the real sensor has the same resolution.
+
+**`radiation` is the one field still missing**, and not for want of a chip. The shim imitates a
+ClimateGuard RadSens correctly — you can watch it put the right bytes on the bus — but Portduino
+buffers received bytes in a `char RXbuf[1000]` and hands them back as a signed `int`, so every byte
+over 0x7F arrives negative. Drivers that store into a `uint8_t` first are unharmed; `CGRadSensSensor`
+assigns straight into a `uint32_t`, so a reading of 13.7 µR/h reaches the mesh as 429496736. The chip
+model and its self-test are in the tree, ready for the day that is fixed upstream.
+
+Adding another field is a chip model in `shim/i2cshim.c` and a row in the table in
+`internal/sensors/api.go`; `shim/README.md` explains how, and the self-test is where you prove it
+before ever touching a node.
 
 Pick the fields per attachment: a source that reports temperature and humidity can be published
 whole on one identity and temperature-only on another.
@@ -117,8 +130,10 @@ Three notes from the Meshtastic side:
 - **Particulates are a separate telemetry packet.** A node publishing `pm*` is asked for air-quality
   telemetry as well as environment telemetry, and its first air-quality packet comes about two
   minutes after it starts — the firmware's own delay.
-- `pressure` needs a BME280's calibration block emulated, which is more pretending than it's worth
-  for now.
+- `pressure` arrives through a BMP280, whose compensation polynomial we make into the identity by
+  choosing the calibration constants (`dig_T2 = 16384`, `dig_P1 = 6250`, the rest zero) — so the
+  node's own arithmetic turns our raw counts back into exactly the hPa we were given. An LPS22HB
+  would be simpler still, but the Linux meshtasticd package is built without that driver.
 
 ## Setting it up in the GUI
 

@@ -87,7 +87,7 @@ func TestSensorsCRUDRoundTrip(t *testing.T) {
 		m := f.(map[string]any)
 		chips[m["field"].(string)] = m["chip"].(string)
 	}
-	if chips["temperature"] != "pct2075" || chips["pressure"] != "" {
+	if chips["temperature"] != "pct2075" || chips["pressure"] != "bmp280" || chips["radiation"] != "" {
 		t.Fatalf("field catalogue: %v", chips)
 	}
 
@@ -379,7 +379,7 @@ func TestIdentitySensorsRefusals(t *testing.T) {
 		want string
 	}{
 		{"no such sensor", []map[string]any{{"sensor": "ghost"}}, "no sensor called ghost"},
-		{"no chip carries it", []map[string]any{{"sensor": "shed", "fields": []string{"pressure"}}}, "no node can publish pressure"},
+		{"no chip carries it", []map[string]any{{"sensor": "shed", "fields": []string{"radiation"}}}, "no node can publish radiation"},
 		{"unknown field", []map[string]any{{"sensor": "shed", "fields": []string{"loudness"}}}, "no reading called loudness"},
 		{"twice", []map[string]any{{"sensor": "shed"}, {"sensor": "shed"}}, "listed twice"},
 	}

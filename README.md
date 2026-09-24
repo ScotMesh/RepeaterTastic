@@ -164,10 +164,11 @@ An air quality sensor fed from elsewhere — Home Assistant, a cron job, anythin
 ```
 
 Which readings reach the air is fixed by the chips the shim imitates: temperature, humidity,
-`pm10`/`pm25`/`pm100`, voltage and current. Pressure, lux, distance, radiation and rainfall are
-refused with a message saying so rather than silently dropped —
-[the table in the guide](docs/sensors.md#which-fields-can-be-published) has the details, and adding
-one is a chip model in `shim/i2cshim.c`.
+pressure, lux, `pm10`/`pm25`/`pm100`, voltage, current, distance and rainfall over 1 and 24 hours.
+`radiation` is the one field still refused, and it says why — the firmware's Linux I²C layer mangles
+any byte over 0x7F, so a RadSens reading comes back as nonsense.
+[The table in the guide](docs/sensors.md#which-fields-can-be-published) has the details, and adding a
+field is a chip model in `shim/i2cshim.c`.
 
 ## Documentation
 

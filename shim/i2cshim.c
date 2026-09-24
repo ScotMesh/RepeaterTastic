@@ -174,6 +174,12 @@ enum chip {
     CHIP_INA226,
     CHIP_AHT10,
     CHIP_PMSA003I,
+    CHIP_BH1750,
+    CHIP_RCWL9620,
+    CHIP_CGRADSENS,
+    CHIP_DFROBOT_RAIN,
+    CHIP_LPS22,
+    CHIP_BMP280,
     CHIP_COUNT
 };
 
@@ -186,6 +192,12 @@ static const struct {
     [CHIP_INA226] = {"ina226", 0x40},
     [CHIP_AHT10] = {"aht10", 0x38},
     [CHIP_PMSA003I] = {"pmsa003i", 0x12},
+    [CHIP_BH1750] = {"bh1750", 0x23},
+    [CHIP_RCWL9620] = {"rcwl9620", 0x57},
+    [CHIP_CGRADSENS] = {"cgradsens", 0x66},
+    [CHIP_DFROBOT_RAIN] = {"dfrobot_rain", 0x1D},
+    [CHIP_LPS22] = {"lps22", 0x5C},
+    [CHIP_BMP280] = {"bmp280", 0x76},
 };
 
 /* ---- configuration ------------------------------------------------------- */
@@ -597,6 +609,282 @@ static size_t model_pmsa003i(uint8_t *tmp, size_t len)
     return n;
 }
 
+
+/*
+ * BH1750 (lux). No registers: the driver writes a one-byte command and then reads
+ * the 16-bit result. BH1750_WE asks for CHM (0x10) and computes lux = raw / 1.2,
+ * so the raw value we hand back is the lux we were given times 1.2. The scan
+ * first reads register 0x86 and must not see an LTR553ALS there (0x92), then
+ * writes 0x01 and only needs the write to be acknowledged.
+ */
+static size_t model_bh1750(int reg, uint8_t *tmp, size_t len)
+{
+    if (len == 1 && reg == 0x86) { /* the scan's LTR553ALS part-id probe */
+        tmp[0] = 0x00;
+        return 1;
+    }
+    double lux = value_or("lux", 0.0);
+    double raw = lux * 1.2;
+    if (raw < 0.0)
+        raw = 0.0;
+    if (raw > 65535.0)
+        raw = 65535.0;
+    put_be16(tmp, (uint16_t)lround(raw));
+    return 2;
+}
+
+/*
+ * RCWL-9620 (distance). The driver writes 0x01 to start a measurement and reads
+ * three bytes, big-endian, which it divides by 1000 to get millimetres. The scan
+ * reads register 0xFF first and treats 0x15 as a MAX30102, so anything else here
+ * leaves it as an RCWL-9620.
+ */
+static size_t model_rcwl9620(int reg, uint8_t *tmp, size_t len)
+{
+    if (len == 1 && reg == 0xFF) { /* not a MAX30102 */
+        tmp[0] = 0x00;
+        return 1;
+    }
+    double mm = value_or("distance", 0.0);
+    if (mm < 0.0)
+        mm = 0.0;
+    if (mm > 4500.0)
+        mm = 4500.0; /* the driver clamps here too */
+    uint32_t data = (uint32_t)lround(mm * 1000.0);
+    tmp[0] = (uint8_t)(data >> 16);
+    tmp[1] = (uint8_t)(data >> 8);
+    tmp[2] = (uint8_t)data;
+    return 3;
+}
+
+/*
+ * ClimateGuard RadSens (radiation). Register 0x00 is the product id the scan
+ * checks; 0x03 and 0x06 are the dynamic and static intensities, three bytes
+ * big-endian in units of 0.1 uR/h.
+ */
+static size_t model_cgradsens(int reg, uint8_t *tmp, size_t len)
+{
+    /* Three bytes is always an intensity read (0x03 dynamic, 0x06 static), whatever
+     * the register pointer says: the driver writes the register and reads straight
+     * back, and answering by length as well leaves nothing to go stale. */
+    if (len == 3) {
+        double uR = value_or("radiation", 0.0);
+        if (uR < 0.0)
+            uR = 0.0;
+        uint32_t d = (uint32_t)lround(uR * 10.0);
+        if (d > 0xFFFFFF)
+            d = 0xFFFFFF;
+        tmp[0] = (uint8_t)(d >> 16);
+        tmp[1] = (uint8_t)(d >> 8);
+        tmp[2] = (uint8_t)d;
+        return 3;
+    }
+    if (reg == 0x00) {
+        tmp[0] = 0x7D; /* product identifier */
+        return 1;
+    }
+    if (reg == 0x01) {
+        tmp[0] = 0x05; /* firmware version, never checked */
+        return 1;
+    }
+    double uR = value_or("radiation", 0.0);
+    if (uR < 0.0)
+        uR = 0.0;
+    uint32_t data = (uint32_t)lround(uR * 10.0);
+    if (data > 0xFFFFFF)
+        data = 0xFFFFFF;
+    tmp[0] = (uint8_t)(data >> 16);
+    tmp[1] = (uint8_t)(data >> 8);
+    tmp[2] = (uint8_t)data;
+    return 3;
+}
+
+/*
+ * DFRobot SEN0575 rain gauge. begin() reads four bytes at 0x00 and insists on
+ * vid 0x3343 and pid 0x100C0, which the library rebuilds as
+ *   pid = b0 | b1<<8 | (b3 & 0xC0)<<10      vid = b2 | (b3 & 0x3F)<<8
+ * so the four bytes have to be C0 00 43 73. Rainfall for a window is read by
+ * writing the number of hours to 0x26 and reading four little-endian bytes at
+ * 0x0C, in ten-thousandths of a millimetre; 1 hour and 24 hours are the two the
+ * firmware asks for. The scan gets here only when register 0xF0 has none of the
+ * DS2482 status bits set.
+ */
+static size_t model_dfrobot_rain(int addr, int reg, uint8_t *tmp)
+{
+    switch (reg) {
+    case 0x00: /* PID / VID */
+        tmp[0] = 0xC0;
+        tmp[1] = 0x00;
+        tmp[2] = 0x43;
+        tmp[3] = 0x73;
+        return 4;
+    case 0x0A: /* firmware version, shown in the log only */
+        tmp[0] = 0x10;
+        tmp[1] = 0x00;
+        return 2;
+    case 0x0C: { /* rainfall over the window last written to 0x26 */
+        unsigned hours = g_shadow[addr][0x26] & 0xFF;
+        double mm = value_or(hours > 1 ? "rainfall_24h" : "rainfall_1h", 0.0);
+        if (mm < 0.0)
+            mm = 0.0;
+        double ticks = mm * 10000.0;
+        if (ticks > 4294967295.0)
+            ticks = 4294967295.0;
+        uint32_t v = (uint32_t)llround(ticks);
+        tmp[0] = (uint8_t)v;
+        tmp[1] = (uint8_t)(v >> 8);
+        tmp[2] = (uint8_t)(v >> 16);
+        tmp[3] = (uint8_t)(v >> 24);
+        return 4;
+    }
+    case 0x10: { /* cumulative rainfall: the 24 hour figure is the closest thing */
+        double mm = value_or("rainfall_24h", 0.0);
+        uint32_t v = (uint32_t)llround(mm < 0.0 ? 0.0 : mm * 10000.0);
+        tmp[0] = (uint8_t)v;
+        tmp[1] = (uint8_t)(v >> 8);
+        tmp[2] = (uint8_t)(v >> 16);
+        tmp[3] = (uint8_t)(v >> 24);
+        return 4;
+    }
+    case 0xF0: /* the scan's DS2482 status probe: none of 0x16 set */
+        tmp[0] = 0x00;
+        return 1;
+    default:
+        tmp[0] = 0x00;
+        return 1;
+    }
+}
+
+/*
+ * LPS22HB (pressure, and temperature with it). Adafruit_LPS2X checks WHO_AM_I,
+ * soft-resets through CTRL_REG2 and waits for the bit to clear, then reads three
+ * little-endian bytes of pressure at 0x28 (hPa = raw / 4096) and two of
+ * temperature at 0x2B (degC = raw / 100). It reports temperature as well as
+ * pressure, so we answer with the same temperature the other chips give rather
+ * than let one sensor contradict another.
+ */
+static size_t model_lps22(int addr, int reg, uint8_t *tmp, size_t len)
+{
+    switch (reg) {
+    case 0x0F: /* WHO_AM_I */
+        tmp[0] = 0xB1;
+        return 1;
+    case 0x11: /* CTRL_REG2: the reset bit reads back clear, so begin() proceeds */
+        tmp[0] = (uint8_t)(g_shadow[addr][0x11] & ~0x04u);
+        return 1;
+    case 0x27: /* STATUS: pressure and temperature both ready */
+        tmp[0] = 0x03;
+        return 1;
+    case 0x28: { /* PRESS_OUT_XL, then _L and _H by auto-increment */
+        double hPa = value_or("pressure", 1013.25);
+        if (hPa < 0.0)
+            hPa = 0.0;
+        int32_t raw = (int32_t)lround(hPa * 4096.0);
+        tmp[0] = (uint8_t)raw;
+        tmp[1] = (uint8_t)(raw >> 8);
+        tmp[2] = (uint8_t)(raw >> 16);
+        if (len <= 3)
+            return 3;
+        /* a longer read carries on into the temperature registers */
+        int16_t t = (int16_t)lround(value_or("temperature", 20.0) * 100.0);
+        tmp[3] = (uint8_t)t;
+        tmp[4] = (uint8_t)(t >> 8);
+        return 5;
+    }
+    case 0x2B: { /* TEMP_OUT_L, _H */
+        int16_t t = (int16_t)lround(value_or("temperature", 20.0) * 100.0);
+        tmp[0] = (uint8_t)t;
+        tmp[1] = (uint8_t)(t >> 8);
+        return 2;
+    }
+    default:
+        tmp[0] = (uint8_t)g_shadow[addr][reg & 0xFF];
+        return 1;
+    }
+}
+
+
+/*
+ * BMP280 (pressure, and the temperature that comes with it). Bosch's part answers
+ * raw ADC counts that the driver runs through a compensation polynomial with 12
+ * calibration words, so the trick is to pick calibration that makes the polynomial
+ * the identity:
+ *
+ *   dig_T1 = 0, dig_T2 = 16384, dig_T3 = 0   ->  t_fine = adc_T, degC = adc_T / 5120
+ *   dig_P1 = 6250, dig_P2..P9 = 0            ->  Pa = 1048576 - adc_P
+ *
+ * so adc_T = degC * 5120 and adc_P = 1048576 - Pa, both comfortably inside the 20
+ * bits the registers hold. Everything else here is what Adafruit_BMP280::begin()
+ * insists on seeing: the chip id, a reset that appears to have finished, and
+ * status with neither the measuring nor the im_update bit set.
+ *
+ * LPS22HB would have been simpler, but the Linux meshtasticd package is built
+ * without that driver; BMP280 is compiled in.
+ */
+static void bmp280_image(uint8_t *img)
+{
+    memset(img, 0, 256);
+    img[0xD0] = 0x58; /* chip id */
+    img[0x00] = 0x58; /* the scan falls back to register 0x00 for the BMP family */
+
+    /* calibration, little-endian words at 0x88 */
+    const uint16_t dig_T1 = 0, dig_P1 = 6250;
+    const int16_t dig_T2 = 16384, dig_T3 = 0;
+    img[0x88] = (uint8_t)dig_T1;
+    img[0x89] = (uint8_t)(dig_T1 >> 8);
+    img[0x8A] = (uint8_t)dig_T2;
+    img[0x8B] = (uint8_t)((uint16_t)dig_T2 >> 8);
+    img[0x8C] = (uint8_t)dig_T3;
+    img[0x8D] = (uint8_t)((uint16_t)dig_T3 >> 8);
+    img[0x8E] = (uint8_t)dig_P1;
+    img[0x8F] = (uint8_t)(dig_P1 >> 8);
+    /* dig_P2..P9 (0x90..0x9F) stay zero */
+
+    double hPa = value_or("pressure", 1013.25);
+    if (hPa < 0.0)
+        hPa = 0.0;
+    double pa = hPa * 100.0;
+    double adc_p = 1048576.0 - pa;
+    if (adc_p < 0.0)
+        adc_p = 0.0;
+    if (adc_p > 1048575.0)
+        adc_p = 1048575.0;
+    uint32_t p20 = (uint32_t)llround(adc_p);
+
+    double degC = value_or("temperature", 20.0);
+    double adc_t = degC * 5120.0;
+    if (adc_t < 0.0)
+        adc_t = 0.0; /* the compensation is linear, but the register is unsigned */
+    if (adc_t > 1048575.0)
+        adc_t = 1048575.0;
+    uint32_t t20 = (uint32_t)llround(adc_t);
+
+    /* 0xF7..0xF9 pressure, 0xFA..0xFC temperature, each 20 bits left-aligned */
+    img[0xF7] = (uint8_t)(p20 >> 12);
+    img[0xF8] = (uint8_t)(p20 >> 4);
+    img[0xF9] = (uint8_t)((p20 & 0x0F) << 4);
+    img[0xFA] = (uint8_t)(t20 >> 12);
+    img[0xFB] = (uint8_t)(t20 >> 4);
+    img[0xFC] = (uint8_t)((t20 & 0x0F) << 4);
+
+    img[0xF3] = 0x00; /* status: not measuring, calibration not being copied */
+}
+
+static size_t model_bmp280(int addr, int reg, uint8_t *tmp, size_t len)
+{
+    uint8_t img[256];
+    bmp280_image(img);
+    /* the control registers read back what was written to them */
+    img[0xF4] = (uint8_t)g_shadow[addr][0xF4];
+    img[0xF5] = (uint8_t)g_shadow[addr][0xF5];
+    size_t n = len;
+    if (n > MAX_READ)
+        n = MAX_READ;
+    for (size_t i = 0; i < n; i++)
+        tmp[i] = img[(reg + (int)i) & 0xFF];
+    return n;
+}
+
 /* Fill out[0..len) for a read of `reg` from `addr`. -1 NAKs. */
 static int chip_read(int addr, int reg, uint8_t *out, size_t len)
 {
@@ -625,6 +913,24 @@ static int chip_read(int addr, int reg, uint8_t *out, size_t len)
         break;
     case CHIP_PMSA003I:
         w = model_pmsa003i(tmp, len);
+        break;
+    case CHIP_BH1750:
+        w = model_bh1750(reg, tmp, len);
+        break;
+    case CHIP_RCWL9620:
+        w = model_rcwl9620(reg, tmp, len);
+        break;
+    case CHIP_CGRADSENS:
+        w = model_cgradsens(reg, tmp, len);
+        break;
+    case CHIP_DFROBOT_RAIN:
+        w = model_dfrobot_rain(addr, reg, tmp);
+        break;
+    case CHIP_LPS22:
+        w = model_lps22(addr, reg, tmp, len);
+        break;
+    case CHIP_BMP280:
+        w = model_bmp280(addr, reg, tmp, len);
         break;
     default:
         return -1;

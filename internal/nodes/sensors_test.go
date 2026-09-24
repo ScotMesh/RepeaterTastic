@@ -112,9 +112,9 @@ func TestPlanSensorsChips(t *testing.T) {
 			{Sensor: "air", Fields: []sensors.Field{sensors.PM25, sensors.PM100}}}, "pmsa003i", "pm100,pm25", true},
 		{"no fields: whatever the source reports", []sensors.Attachment{{Sensor: "weather"}}, "pct2075", "temperature", false},
 		{"a field no chip carries is dropped", []sensors.Attachment{
-			{Sensor: "shed", Fields: []sensors.Field{sensors.Pressure, sensors.Temperature}}}, "pct2075", "temperature", false},
+			{Sensor: "shed", Fields: []sensors.Field{sensors.Radiation, sensors.Temperature}}}, "pct2075", "temperature", false},
 		{"nothing carried at all", []sensors.Attachment{
-			{Sensor: "shed", Fields: []sensors.Field{sensors.Pressure}}}, "", "", false},
+			{Sensor: "shed", Fields: []sensors.Field{sensors.Radiation}}}, "", "", false},
 		{"nothing attached", nil, "", "", false},
 	}
 	for _, tc := range cases {

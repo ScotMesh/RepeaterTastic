@@ -97,8 +97,31 @@ last writer wins, so exactly one emulated chip carries each field.
 | `ina226` | 0x40 | `voltage`, `current` | power / environment | MFG 0xFE = 0x5449 **and** die 0xFF = 0x2260 |
 | `aht10` | 0x38 | `humidity` (+ `temperature`) | environment `relative_humidity` | address alone, no ID check |
 | `pmsa003i` | 0x12 | `pm10`, `pm25`, `pm100` | air quality `pm*_standard` and `pm*_environmental` | address alone, no ID check |
+| `bmp280` | 0x76 | `pressure` (+ `temperature`) | environment `barometric_pressure` | chip id 0xD0 = 0x58, and register 0x00 for the scan's fallback |
+| `bh1750` | 0x23 | `lux` | environment `lux` | 0x86 must not be an LTR553ALS, then a power-on write is acknowledged |
+| `rcwl9620` | 0x57 | `distance` | environment `distance` | 0xFF must not be 0x15 (that would be a MAX30102) |
+| `dfrobot_rain` | 0x1D | `rainfall_1h`, `rainfall_24h` | environment `rainfall_1h` / `rainfall_24h` | 0xF0 without DS2482 status bits, then vid 0x3343 / pid 0x100C0 at 0x00 |
+| `cgradsens` | 0x66 | `radiation` — **do not use, see below** | environment `radiation` | product id 0x00 = 0x7D |
+| `lps22` | 0x5C | `pressure` (+ `temperature`) | nothing: no driver in the Linux build | WHO_AM_I 0x0F = 0xB1 |
 
-Use `pct2075` **or** `mcp9808`, never both. `aht10` also reports `temperature`,
+`bmp280` carries pressure by making Bosch's compensation polynomial the identity:
+with `dig_T1 = 0, dig_T2 = 16384, dig_T3 = 0` the firmware computes `degC = adc_T /
+5120`, and with `dig_P1 = 6250` and every other pressure coefficient zero it computes
+`Pa = 1048576 - adc_P`. Both invert to exact integers, so what the node broadcasts is
+what the values file said.
+
+Two chips are present but not offered by `internal/sensors`:
+
+- **`cgradsens`** works on the wire — the self-test proves the right bytes — but
+  Portduino keeps received bytes in a `char RXbuf[1000]` and returns them through
+  `int tmpVal = RXbuf[RXindex]`, so any byte over 0x7F arrives negative. Drivers that
+  store into a `uint8_t` first (RCWL9620) are fine; `CGRadSensSensor` assigns straight
+  into a `uint32_t`, so 13.7 µR/h reaches the mesh as 429496736. `check_signed_byte`
+  in `replay.c` pins this down, and will start failing when it is fixed upstream.
+- **`lps22`** answers correctly, but the meshtasticd Debian package is built without
+  `Adafruit_LPS2X`, so nothing ever reads it. BMP280 is there instead.
+
+Use `pct2075` **or** `mcp9808`, never both, and `bmp280` **or** `lps22`, never both. `aht10` also reports `temperature`,
 because the firmware's AHT10 driver fills each metric only `if (!has_*)` — whichever
 temperature source the firmware happens to reach first, the reading is the file's.
 
