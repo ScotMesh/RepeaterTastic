@@ -1,6 +1,6 @@
 # Configuration
 
-[← README](../README.md) · [Hardware](hardware.md) · [Web GUI](web-gui.md) · [Several radios](radios.md) · [MQTT](mqtt.md) · [Architecture](architecture.md)
+[← README](../README.md) · [Hardware](hardware.md) · [Web GUI](web-gui.md) · [Several radios](radios.md) · [MQTT](mqtt.md) · [Sensors](sensors.md) · [Architecture](architecture.md)
 
 Almost everything here can be set in the web GUI under **Configuration**, which writes the same
 file. You only need to edit YAML by hand for first-time automation or settings the GUI doesn't show.
@@ -37,6 +37,9 @@ with a **Restart now** button:
 - MQTT connections and UDP multicast
 - `web.bind`, `web.port` and `mdns`
 - turning a site airtime cap on for a single radio
+- attaching or detaching a sensor on an identity, which restarts that identity's node only (its
+  meshtasticd scans for sensors once at start-up); changing a sensor's command, path, interval or
+  value applies live
 - anything in `plugins:` except the send limits (enabled, dir, listen, URL installs, entries); the
   send limits apply live from **Plugins → Send limits**
 - a restored backup
@@ -244,6 +247,11 @@ where the relay and each identity run:
 ### `radios` and `site`
 
 Extra radios and the site-wide airtime cap are covered in [Several radios](radios.md).
+
+### `sensors`
+
+Host sensors and which identities publish them. Each identity's meshtasticd sends the telemetry
+itself, so one reading can appear on as many identities as you like. See [Sensors](sensors.md#setting-it-up-in-the-config-file).
 
 ### `plugins`
 

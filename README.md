@@ -28,6 +28,8 @@ Scottish mesh sites, and useful anywhere.
 - **Several radios on one host** (LongFast, MediumFast, …) that take turns on shared frequencies.
 - **MQTT** to one or more brokers (gateway, uplink-only, map reports, monitor, bridge), a fixed
   site position, device telemetry and an optional UDP multicast link to `meshtasticd` on the LAN.
+- **Sensors** on the host, published by whichever identities you choose — each one broadcasting the
+  reading as its own sensor, on stock meshtasticd, with no root and no I²C hardware needed.
 - **Plugins** add uploaders, bots and dashboards: upload a .zip in the GUI or drop it in a folder,
   choose what each one may see, and cap how much it may send.
 - **One container, or one binary plus meshtasticd.** The image includes meshtasticd; standalone,
@@ -97,6 +99,7 @@ Docker) bakes in a default map tile key; see [Configuration](docs/configuration.
 | [Using the web GUI](docs/web-gui.md) | Identities, chat, channels, nodes and map, packets, statistics, configuration tabs |
 | [Several radios](docs/radios.md) | Running LongFast and MediumFast side by side, moving identities between them, and the site airtime cap |
 | [MQTT](docs/mqtt.md) | Broker connections, modes, channels, relaying and map reports |
+| [Sensors](docs/sensors.md) | Publishing a host sensor on as many identities as you like: sources, fields, attaching, pushing readings |
 | [Plugins](docs/plugins.md) | Installing plugins (GUI, folder, CLI, Docker), permissions, attached plugins, and writing your own |
 | [Architecture and development](docs/architecture.md) | How it fits together, code layout, tests and interop |
 | [Plugin API](docs/plugin-api.md) | Reference for plugin authors: the gRPC session, calls, events, errors, manifest and settings |
