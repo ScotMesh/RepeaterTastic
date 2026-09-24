@@ -87,22 +87,27 @@ owns each field.
 | --- | --- | --- | --- |
 | `temperature` | °C | PCT2075 | 0x37 |
 | `humidity` | % | AHT10 | 0x38 |
-| `lux` | lx | BH1750 | 0x23 |
 | `pm10` `pm25` `pm100` | µg/m³ | PMSA003I | 0x12 |
 | `voltage` `current` | V, A | INA226 | 0x40 |
-| `distance` | mm | RCWL-9620 | 0x57 |
-| `radiation` | µR/h | CG-RadSens | 0x66 |
-| `rainfall_1h` `rainfall_24h` | mm | DFRobot rain gauge | 0x1D |
+
+Those four are the chips the shim imitates today, each proven on a stock meshtasticd. Anything
+Meshtastic can carry but they can't — `pressure`, `lux`, `distance`, `radiation`, `rainfall_1h`,
+`rainfall_24h` — is refused with a message saying so, rather than quietly dropped. Adding one is a
+chip model in `shim/i2cshim.c` and a row in the table in `internal/sensors/api.go`; `shim/README.md`
+explains how, and the self-test is where you prove it.
 
 Pick the fields per attachment: a source that reports temperature and humidity can be published
 whole on one identity and temperature-only on another.
 
-Two notes from the Meshtastic side:
+Three notes from the Meshtastic side:
 
 - The phone apps' environment tab wants **temperature and humidity together**; temperature alone
   shows up, but in a plainer way.
-- `pressure` is not in the table. The chips that carry it need a calibration block emulated, which is
-  more pretending than it's worth for now.
+- **Particulates are a separate telemetry packet.** A node publishing `pm*` is asked for air-quality
+  telemetry as well as environment telemetry, and its first air-quality packet comes about two
+  minutes after it starts — the firmware's own delay.
+- `pressure` needs a BME280's calibration block emulated, which is more pretending than it's worth
+  for now.
 
 ## Setting it up in the GUI
 

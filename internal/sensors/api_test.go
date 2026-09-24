@@ -19,3 +19,22 @@ func TestSourceIDValidation(t *testing.T) {
 		}
 	}
 }
+
+// Publishable and ChipFor must agree with the chips the shim actually implements.
+func TestPublishableMatchesTheChips(t *testing.T) {
+	want := []Field{Temperature, Humidity, PM10, PM25, PM100, Voltage, Current}
+	got := Publishable()
+	if len(got) != len(want) {
+		t.Fatalf("publishable = %v, want %v", got, want)
+	}
+	for _, f := range want {
+		if !Carried(f) || ChipFor(f) == "" {
+			t.Errorf("%s is not carried", f)
+		}
+	}
+	for _, f := range []Field{Pressure, Lux, Distance, Radiation, Rainfall1h, Rainfall24h} {
+		if Carried(f) || ChipFor(f) != "" {
+			t.Errorf("%s is claimed as carried but no chip is implemented", f)
+		}
+	}
+}

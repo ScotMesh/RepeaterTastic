@@ -166,16 +166,39 @@ type Chip struct {
 	Fields []Field // what it can carry
 }
 
-// Chips are the imitations the shim implements, in the order they are planned.
+// Chips are the imitations the shim implements, in the order they are planned. The shim can also
+// imitate an MCP9808, which carries temperature too; PCT2075 owns temperature here because exactly
+// one chip may own a field. Fields no chip carries (pressure, lux, distance, radiation, rainfall)
+// are refused with a message rather than silently dropped — see shim/README.md to add one.
 var Chips = []Chip{
 	{"pct2075", 0x37, []Field{Temperature}},
 	{"aht10", 0x38, []Field{Humidity}},
-	{"bh1750", 0x23, []Field{Lux}},
 	{"pmsa003i", 0x12, []Field{PM10, PM25, PM100}},
 	{"ina226", 0x40, []Field{Voltage, Current}},
-	{"rcwl9620", 0x57, []Field{Distance}},
-	{"cgradsens", 0x66, []Field{Radiation}},
-	{"dfrobot_rain", 0x1D, []Field{Rainfall1h, Rainfall24h}},
+}
+
+// Publishable lists the fields an identity can publish today, in Fields order: those an imitated
+// chip carries. This is what the GUI offers.
+func Publishable() []Field {
+	out := make([]Field, 0, len(Fields))
+	for _, f := range Fields {
+		if Carried(f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// ChipFor names the chip that carries f, for the GUI and the docs ("" = none does).
+func ChipFor(f Field) string {
+	for _, c := range Chips {
+		for _, cf := range c.Fields {
+			if cf == f {
+				return c.Name
+			}
+		}
+	}
+	return ""
 }
 
 // PlanChips picks the chips a node needs to carry fields, and reports any field no chip can carry.

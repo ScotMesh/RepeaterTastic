@@ -84,7 +84,7 @@ func TestSensorsValidation(t *testing.T) {
 		"sensors:\n    sources:\n        - {id: a, kind: file}\n":                                                                        "needs a path",
 		"sensors:\n    sources:\n        - {id: a, kind: wishful}\n":                                                                     "push, exec or file",
 		"sensors:\n    sources:\n        - {kind: push}\n":                                                                               "needs an id",
-		"sensors:\n    sources:\n        - {id: a b, kind: push}\n":                                                                      "letters, digits and dashes",
+		"sensors:\n    sources:\n        - {id: a b, kind: push}\n":                                                                      "letters, digits, dashes",
 		"sensors:\n    sources:\n        - {id: a, kind: file, path: /p, interval: 1s}\n":                                                "no more often than every 5s",
 		"sensors:\n    sources:\n        - {id: a, kind: push}\n        - {id: a, kind: push}\n":                                         "two sensors are called",
 		"sensors:\n    attach:\n        - {sensor: ghost, identities: [all]}\n":                                                          "no sensor called",

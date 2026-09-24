@@ -26,9 +26,10 @@ RT_TEST_MQTT_BROKER=host:1883 go test ./internal/links/mqtt   # MQTT against a r
 ```
 
 `internal/web/dist` is committed: any change under `ui/` needs `npm run build` and the rebuilt
-`dist` in the same commit, or the daemon serves the old GUI. `shim/build/*.so` is committed the same
-way and for the same reason — the daemon embeds it — so a change to `shim/*.c` needs `make shim` and
-the rebuilt libraries in the same commit.
+`dist` in the same commit, or the daemon serves the old GUI. `internal/nodes/shim/*.so` is committed the
+same way and for the same reason — the daemon embeds it — so a change to `shim/*.c` needs
+`make shim` (which builds both architectures and copies them there) and the rebuilt libraries in the
+same commit. `make shim-test` replays the firmware's own I²C call sequences against them.
 
 ## Layout
 

@@ -91,10 +91,10 @@ func TestRenderValuesParseValuesRoundTrip(t *testing.T) {
 }
 
 func TestRenderValuesNarrowsToWantedFields(t *testing.T) {
-	rd := Reading{Fields: map[Field]float64{Temperature: 21.5, Humidity: 40, Lux: 120}}
-	out := string(RenderValues(rd, []Field{Temperature, Lux}))
-	if out != "lux=120.0000\ntemperature=21.5000\n" {
-		t.Errorf("RenderValues = %q, want lux and temperature, sorted", out)
+	rd := Reading{Fields: map[Field]float64{Temperature: 21.5, Humidity: 40, PM25: 12}}
+	out := string(RenderValues(rd, []Field{Temperature, PM25}))
+	if out != "pm25=12.0000\ntemperature=21.5000\n" {
+		t.Errorf("RenderValues = %q, want pm25 and temperature, sorted", out)
 	}
 	if RenderValues(Reading{}, nil) != nil {
 		t.Error("a reading with no fields wrote a file")
@@ -126,8 +126,9 @@ func TestPlanChipsCarriesWhatWeRender(t *testing.T) {
 	}{
 		{"one field, one chip", []Field{Temperature}, "pct2075", nil},
 		{"two fields on one chip", []Field{Voltage, Current}, "ina226", nil},
-		{"chips come in a fixed order", []Field{Lux, Temperature}, "pct2075,bh1750", nil},
+		{"chips come in a fixed order", []Field{PM25, Humidity}, "aht10,pmsa003i", nil},
 		{"no chip carries pressure", []Field{Temperature, Pressure}, "pct2075", []Field{Pressure}},
+		{"nor lux, yet", []Field{Lux}, "", []Field{Lux}},
 		{"nothing at all", nil, "", nil},
 	}
 	for _, tc := range cases {
