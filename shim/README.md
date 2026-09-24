@@ -22,12 +22,28 @@ the values file, and shares the file format with this shim.
 ./build.sh          # or: make shim       (from the repo root)
 ```
 
-Produces `build/i2cshim-linux-amd64.so` and `build/i2cshim-linux-arm64.so`.
+Produces one object per architecture the daemon ships for, named after the Go
+`GOARCH` it is embedded under — that is what the embed lookup keys off:
+
+| file | target |
+| --- | --- |
+| `build/i2cshim-linux-amd64.so` | x86-64 |
+| `build/i2cshim-linux-arm64.so` | AArch64 (64-bit Pi OS) |
+| `build/i2cshim-linux-arm.so` | **armv7** hard-float (`GOARCH=arm`, `GOARM=7`, 32-bit Pi OS) |
+
+`make shim` also copies all three into `internal/nodes/shim/`, which the daemon
+embeds, so hosting a sensor needs nothing installed on the host.
+
+There is deliberately **no armv6 object**. `GOARCH=arm` here means armv7
+(`-march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard`, Debian's armhf baseline), so a
+Pi Zero or Pi 1 on an armv6 build has no shim at all and the daemon says so plainly
+rather than starting a node that half-works.
 
 The compile happens inside `debian:trixie` (via a small cached builder image), and
-arm64 is cross-compiled — no qemu. The build asserts that neither object requires a
-glibc symbol newer than **GLIBC_2.34**, so one object loads on every meshtasticd
-image we support, and that the interposers are really exported.
+both ARM targets are cross-compiled — no qemu. The build asserts that no object
+requires a glibc symbol newer than **GLIBC_2.34**, so one object loads on every
+meshtasticd image we support, and that every interposer is really exported
+(`__ioctl_time64` too, on 32-bit ARM — see below).
 
 ## Testing
 
@@ -42,6 +58,12 @@ write-then-read, the AHT10 command sequence and the PMSA003I frame read. It asse
 the decoded readings against the values file, rewrites the file and asserts the new
 ones. No containers and no meshtasticd, about a second, non-zero exit on failure —
 so it runs in CI.
+
+It runs the whole suite a second time against `build/i2cshim-linux-arm.so` under
+`qemu-user`, **if** the host has `qemu-arm`, an `arm-linux-gnueabihf-gcc` to build
+the replay with, and an armhf sysroot. When it doesn't, that stage prints one line
+saying which piece is missing and the native run stands on its own. 32-bit is worth
+the trouble: it is where `__ioctl_time64` bit us.
 
 ## Environment
 
@@ -124,6 +146,22 @@ separate write+read path returns register 0.
 
 Both read paths have to work: the combined `I2C_RDWR` transfer (Adafruit_BusIO's
 `write_then_read`) and the separate `write()` + `read()` pair.
+
+## And one more, on 32-bit ARM
+
+**`ioctl` is not called `ioctl`.** On a glibc port whose `time_t` is still 32 bits —
+Debian armhf and i386 — everything is compiled with `_TIME_BITS=64` by default, and
+`<sys/ioctl.h>` then redirects `ioctl()` to `__ioctl_time64`. meshtasticd's armhf
+package is built that way, so it never calls the symbol `ioctl` at all: interpose
+only `ioctl` and the fake bus opens, the scan finds nothing, and every read NAKs.
+The shim defines both, sharing one body — the variadic third argument is read
+identically — and `build.sh` requires `__ioctl_time64` in the arm object.
+
+The same defaults rename `open`/`openat` to `open64`/`openat64`, which collided with
+the shim's own `open64`, so `i2cshim.c` turns the large-file redirection off before
+its first include. No interposed signature here takes an `off_t` or a `time_t`, so
+`size_t`/`ssize_t` widths are the only thing that varies and those follow the
+platform's own prototypes.
 
 ## Files
 

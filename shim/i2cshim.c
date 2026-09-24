@@ -72,6 +72,16 @@
  * Build: cc -shared -fPIC -O2 -o i2cshim.so i2cshim.c -ldl -lpthread -lm
  */
 
+/* An interposer has to define the exact symbols the program calls, so glibc's
+ * large-file redirection must be off. Debian's 32-bit ARM gcc defaults to
+ * -D_FILE_OFFSET_BITS=64 -D_TIME_BITS=64, and under those <fcntl.h> renames
+ * open() to open64() and openat() to openat64() -- whereupon our own open64 and
+ * openat64 collide with them at assembly time ("symbol `open64' is already
+ * defined"). No interposed signature here takes an off_t or a time_t, so there
+ * is nothing to lose by turning it off, on any architecture. */
+#undef _FILE_OFFSET_BITS
+#undef _TIME_BITS
+
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <errno.h>
@@ -133,6 +143,16 @@ static int (*r_openat)(int, const char *, int, ...);
 static int (*r_openat64)(int, const char *, int, ...);
 static int (*r_close)(int);
 static int (*r_ioctl)(int, unsigned long, ...);
+/* 32-bit ports with 64-bit time_t (Debian armhf, i386) call __ioctl_time64
+ * instead of ioctl -- see the note above __ioctl_time64 below. */
+#if defined(__GLIBC__) && defined(__TIMESIZE) && __TIMESIZE == 32
+#define SHIM_TIME64_IOCTL 1
+#else
+#define SHIM_TIME64_IOCTL 0
+#endif
+#if SHIM_TIME64_IOCTL
+static int (*r_ioctl_time64)(int, unsigned long, ...);
+#endif
 static ssize_t (*r_read)(int, void *, size_t);
 static ssize_t (*r_read_chk)(int, void *, size_t, size_t);
 static ssize_t (*r_write)(int, const void *, size_t);
@@ -235,6 +255,9 @@ static void __attribute__((constructor)) shim_init(void)
     r_openat64 = dlsym(RTLD_NEXT, "openat64");
     r_close = dlsym(RTLD_NEXT, "close");
     r_ioctl = dlsym(RTLD_NEXT, "ioctl");
+#if SHIM_TIME64_IOCTL
+    r_ioctl_time64 = dlsym(RTLD_NEXT, "__ioctl_time64");
+#endif
     r_read = dlsym(RTLD_NEXT, "read");
     r_read_chk = dlsym(RTLD_NEXT, "__read_chk");
     r_write = dlsym(RTLD_NEXT, "write");
@@ -885,17 +908,19 @@ static int do_smbus(struct i2c_smbus_ioctl_data *d, struct slot *s)
     return 0;
 }
 
-int ioctl(int fd, unsigned long request, ...)
+/* The body of both ioctl entry points. `time64` says which real libc function to
+ * fall through to for an fd that is not ours. */
+static int shim_ioctl(int fd, unsigned long request, void *arg, int time64)
 {
-    va_list ap;
-    va_start(ap, request);
-    void *arg = va_arg(ap, void *);
-    va_end(ap);
-
+    (void)time64;
     pthread_mutex_lock(&g_lock);
     struct slot *s = slot_find(fd);
     if (!s) {
         pthread_mutex_unlock(&g_lock);
+#if SHIM_TIME64_IOCTL
+        if (time64 && r_ioctl_time64)
+            return r_ioctl_time64(fd, request, arg);
+#endif
         return r_ioctl(fd, request, arg);
     }
 
@@ -955,3 +980,30 @@ int ioctl(int fd, unsigned long request, ...)
     pthread_mutex_unlock(&g_lock);
     return rc;
 }
+
+int ioctl(int fd, unsigned long request, ...)
+{
+    va_list ap;
+    va_start(ap, request);
+    void *arg = va_arg(ap, void *);
+    va_end(ap);
+    return shim_ioctl(fd, request, arg, 0);
+}
+
+#if SHIM_TIME64_IOCTL
+/* THE 32-BIT GOTCHA. On a glibc port whose time_t is still 32 bits -- Debian
+ * armhf and i386 -- everything is compiled with _TIME_BITS=64 by default, and
+ * <sys/ioctl.h> then redirects ioctl() to __ioctl_time64. A program built that
+ * way, meshtasticd's armhf package included, never calls the symbol "ioctl" at
+ * all: interpose only ioctl and the fake bus opens, the scan finds nothing and
+ * every read NAKs. The third argument is still read the same way -- variadic,
+ * one pointer-sized slot -- so both entry points share one body. */
+int __ioctl_time64(int fd, unsigned long request, ...)
+{
+    va_list ap;
+    va_start(ap, request);
+    void *arg = va_arg(ap, void *);
+    va_end(ap);
+    return shim_ioctl(fd, request, arg, 1);
+}
+#endif
