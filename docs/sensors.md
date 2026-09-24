@@ -166,7 +166,13 @@ POST /api/sensors/shed/push
 ```
 
 Fields are the names in the table above. See [HTTP API → Sensors](api.md#sensors) for the full set of
-endpoints, and [Plugins](plugins.md) for publishing from a plugin with the `sensors` permission.
+endpoints.
+
+A plugin does the same over the Plugin API with the `sensors.publish` permission — `PublishSensor`,
+or `c.PublishSensor(ctx, "weather", map[string]float64{"temperature": 18.4})` with the Go SDK. That's
+how a plugin that owns some hardware, or fetches a reading from a service, gets it on air; it still
+can't create a sensor or choose who publishes it. See
+[Plugin API → ListSensors and PublishSensor](plugin-api.md#listsensors-and-publishsensor).
 
 ## Airtime
 
